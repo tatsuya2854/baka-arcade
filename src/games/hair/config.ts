@@ -2,20 +2,20 @@
 export const CFG = {
   // --- 風 ---
   firstGustAt: 1.4,        // 最初の突風開始(秒) 弱め
-  firstGustPeak: 0.34,
+  firstGustPeak: 0.4,
   gustWarn: 1.0,           // 突風の予兆(秒前)
   gapStart: 2.3,           // 突風間隔(序盤)
   gapEnd: 0.8,             // 突風間隔(終盤)
   durMin: 1.3, durMax: 2.3,
   peakStart: 0.3,          // 強度カーブ: peak = start + (end-start)*prog*rand
   peakEnd: 1.0,
-  rampTau: 32,             // 難易度上昇の時定数(秒) prog=1-exp(-t/tau)
-  weakChance: 0.3,         // 休める弱風の確率
+  rampTau: 20,             // 難易度上昇の時定数(秒) prog=1-exp(-t/tau)
+  weakChance: 0.2,         // 休める弱風の確率
   breeze: 0.07,
   // --- 抜けゲージ(毛根ストレス) ---
-  windStress: 0.62,        // 風によるストレス上昇/秒 (|風|^windPow に比例)
+  windStress: 1.35,        // 風によるストレス上昇/秒 (|風|^windPow に比例)
   windPow: 1.5,
-  calmRecover: 0.1,        // 弱風(<calmLevel)でのストレス回復/秒
+  calmRecover: 0.07,        // 弱風(<calmLevel)でのストレス回復/秒
   calmLevel: 0.2,
   holdRelief: 0.2,         // 押さえ中の追加回復/秒
   holdBlock: 0.82,         // 押さえで風ストレスを減らす最大割合

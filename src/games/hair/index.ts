@@ -316,7 +316,7 @@ function start(ctx: GameContext): GameInstance {
     }
     for (let i = 0; i < n - 1; i++) {
       const a = hairNodes[i], b = hairNodes[i + 1];
-      g.strokeStyle = col; g.lineWidth = lerp(4.5, 1.8, i / (n - 1));
+      g.strokeStyle = col; g.lineWidth = lerp(6, 2.5, i / (n - 1));
       g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke();
     }
     if (!detached) { g.strokeStyle = 'rgba(255,255,255,.35)'; g.lineWidth = 1; g.beginPath(); g.moveTo(hairNodes[0].x + 1, hairNodes[0].y); for (let i = 1; i < n; i++) g.lineTo(hairNodes[i].x + 1, hairNodes[i].y); g.stroke(); }

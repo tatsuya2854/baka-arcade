@@ -1,5 +1,5 @@
 import { Engine, Bodies, Body, Composite, Events, Sleeping } from 'matter-js';
-import type { GameModule, GameContext } from '../../core/types';
+import type { GameModule, GameContext, ResultArt } from '../../core/types';
 import { drawUncle, drawBubble, TYPE_DIM, type UncleType, type Expr } from '../../core/characters';
 import { meta } from './meta';
 import { CFG, lerp } from './config';
@@ -8,7 +8,7 @@ const STEP = 1000 / 60;
 const SCREAMS = ['ぎゃー', 'うわー', 'たすけてー', 'ひぇー', 'おちるー', 'あああ！', 'むりー'];
 
 interface Uncle {
-  body: Body; type: UncleType; skin: string; h: number; w: number; seed: number;
+  id: number; body: Body; type: UncleType; skin: string; h: number; w: number; seed: number;
   landed: boolean; lost: boolean; removed: boolean; giant: boolean; impact: number; happyT: number;
 }
 interface Part { x: number; y: number; vx: number; vy: number; life: number; max: number; size: number; color: string; kind: 'conf' | 'dust' | 'star'; rot: number; vr: number }
@@ -16,6 +16,55 @@ interface FText { x: number; y: number; text: string; life: number; max: number;
 interface Banner { text: string; sub?: string; life: number; max: number; color: string; size: number }
 interface Bubble { u: Uncle; text: string; life: number }
 type Phase = 'aim' | 'wait' | 'warn' | 'over';
+
+interface Item { type: UncleType; skin: string; x: number; y: number; a: number; h: number; seed: number; bt?: number; bx0?: number; bx1?: number }
+interface View { x0: number; x1: number; top: number; bottom: number }
+interface Frame { plat: number; over: boolean; ids: number[]; d: Float32Array }
+let uid = 1;
+
+function sceneBg(g: CanvasRenderingContext2D, w: number, h: number, seed = 1) {
+  const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#120830'); gr.addColorStop(0.55, '#3a1568'); gr.addColorStop(1, '#8a2a7a');
+  g.fillStyle = gr; g.fillRect(0, 0, w, h);
+  g.fillStyle = '#fff'; for (let i = 0; i < 50; i++) { const x = ((i * 9301 + seed * 49297) % 233280) / 233280 * w, y = ((i * 7919 + 13) % 1000) / 1000 * h * 0.8; g.globalAlpha = 0.3 + (i % 5) * 0.12; g.fillRect(x, y, 1 + i % 3, 1 + i % 3); }
+  g.globalAlpha = 1;
+}
+function drawScene(g: CanvasRenderingContext2D, w: number, h: number, items: Item[], v: View, o: { plat: number; over: boolean; t: number; platOn?: boolean }) {
+  const sc = Math.min(w / (v.x1 - v.x0), h / (v.bottom - v.top));
+  g.save(); g.translate(w / 2 - (v.x0 + v.x1) / 2 * sc, (h - (v.bottom - v.top) * sc) / 2 - v.top * sc); g.scale(sc, sc);
+  const pw = CFG.platformW, th = CFG.platformThick;
+  g.save(); g.translate(0, o.plat);
+  if (!o.over) { g.fillStyle = '#6a3a9a'; g.fillRect(-36, th, 72, 2000); }
+  const sg = g.createLinearGradient(0, 0, 0, th); sg.addColorStop(0, '#ffb35a'); sg.addColorStop(0.2, '#ff7a3d'); sg.addColorStop(1, '#a8341f');
+  g.fillStyle = sg; g.beginPath(); g.roundRect(-pw / 2, 0, pw, th, 10); g.fill(); g.restore();
+  items.forEach((it, i) => {
+    const e: Expr = o.over ? (i % 2 ? 'cry' : 'dead') : (i % 3 === 0 ? 'scared' : 'sweat');
+    g.save(); g.translate(it.x + Math.sin(it.a) * 0.025 * it.h, it.y - Math.cos(it.a) * 0.025 * it.h); g.rotate(it.a + (o.over ? 0 : Math.sin(o.t * 3 + i) * 0.008));
+    drawUncle(g, { x: 0, y: 0, h: it.h, type: it.type, skin: it.skin, expr: e, flail: o.over ? 1 : 0.2, t: o.t + it.seed, seed: it.seed }); g.restore();
+  });
+  g.restore();
+}
+function outlined(g: CanvasRenderingContext2D, text: string, x: number, y: number, size: number, fill: string, lw = 8) {
+  g.font = `900 ${size}px "Hiragino Sans",sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.lineWidth = lw; g.strokeStyle = '#1a0a33'; g.lineJoin = 'round'; g.strokeText(text, x, y); g.fillStyle = fill; g.fillText(text, x, y);
+}
+
+function judgeTitle(n: number, lean: number, ratio: number, heavy: number, thin: number, special: boolean, inverted: boolean, giantOk: boolean): [string, string] {
+  if (giantOk) return ['巨大おじさんを従えし者', '最強の体重すら味方につけた。'];
+  if (inverted) return ['逆立ちの賢者', '頭が下。それでも立っている。'];
+  if (n <= 1) return ['序章で終わった男', 'まだ物語は始まってすらいない。'];
+  if (n <= 3) return ['おじさん入門', 'まずは土台に慣れよう。'];
+  if (n === 9 || n === 19 || n === 49) return ['あと1人で世界遺産', 'あと1人…あと1人だったのに！'];
+  if (lean > 0.3 && n >= 5) return ['重力に嫌われた男', '物理法則が全力で拒否している。'];
+  if (lean > 0.15 && n >= 8) return ['おじさんの違法建築', '建築基準法に正面から喧嘩を売った。'];
+  if (ratio > 4 && n >= 10) return ['奇跡の人体建築', 'この細さでこの高さ。設計者は天才か狂人。'];
+  if (n >= 30) return ['人類史上最も無駄な建造物', '誰も頼んでいない。だが美しい。'];
+  if (special) return ['黄金に魅せられた男', 'ぴかぴかのおじさんが運をくれた。'];
+  if (heavy >= 0.6) return ['筋肉と脂肪の要塞', '重量級だけで組んだ力技の城。'];
+  if (thin >= 0.4) return ['ヒョロヒョロ摩天楼', '風が吹いたら終わる細さ。'];
+  if (n >= 20) return ['おじさん建築の匠', '塔の上から見る景色はどうだ？'];
+  if (n >= 10) return ['ギリギリ建築士', '毎回心臓に悪い積み方。'];
+  return ['近所の迷惑建築', '町内会から苦情が来そうな高さ。'];
+}
 
 function start(ctx: GameContext) {
   const { root, audio } = ctx;
@@ -53,6 +102,10 @@ function start(ctx: GameContext) {
   let shake = 0, flash = 0, flashColor = '255,60,60';
   let tH = 0, zoom = 1, holderY = -300, overT = 0, overReason = '';
   let platFall = { y: 0, vy: 0, rot: 0, vr: 0 };
+  const info = new Map<number, { type: UncleType; skin: string; h: number; seed: number }>();
+  let frames: Frame[] = [], stepN = 0, lastAuto = false;
+  let snap: Item[] = [], stable: Item[] | null = null, snapGiantOk = false;
+  const takeSnap = (): Item[] => standing().map(u => ({ type: u.type, skin: u.skin, x: u.body.position.x, y: u.body.position.y, a: u.body.angle, h: u.h, seed: u.seed, bt: u.body.bounds.min.y, bx0: u.body.bounds.min.x, bx1: u.body.bounds.max.x }));
   let timeScale = 1, finishTimer = 0, raf = 0, last = 0, acc = 0;
   const parts: Part[] = [], texts: FText[] = [], banners: Banner[] = [], bubbles: Bubble[] = [];
   const lastSfx: Record<string, number> = {};
@@ -99,10 +152,10 @@ function start(ctx: GameContext) {
     });
     Body.setMass(body, baseMass * d.mass * (type === 'giant' ? CFG.giantMassScale : 1));
     Body.setInertia(body, body.inertia * CFG.inertiaScale);
-    const u: Uncle = { body, type, skin, h, w, seed: rnd() * 100, landed: false, lost: false, removed: false, giant: type === 'giant', impact: 0, happyT: 0 };
+    const u: Uncle = { id: uid++, body, type, skin, h, w, seed: rnd() * 100, landed: false, lost: false, removed: false, giant: type === 'giant', impact: 0, happyT: 0 };
     (body as any).u = u;
     Composite.add(world, body);
-    uncles.push(u);
+    uncles.push(u); info.set(u.id, { type, skin, h, seed: u.seed });
     return u;
   }
 
@@ -145,7 +198,10 @@ function start(ctx: GameContext) {
   canvas.addEventListener('pointerdown', onPointer);
   addEventListener('keydown', onKey);
 
-  function drop() {
+  const u_isOver = () => phase === 'over';
+  function drop(auto = false) {
+    lastAuto = auto;
+    if (!u_isOver()) stable = takeSnap();
     const u = makeUncle(holder.type, holder.skin, holderX(), holderY);
     const spin = (rnd() - 0.5) * 2 * CFG.spinMax * (0.3 + progress(spawned, 30));
     Body.setVelocity(u.body, { x: 0, y: 1 });
@@ -191,6 +247,9 @@ function start(ctx: GameContext) {
     phase = 'over'; overT = 0; overReason = reason;
     const final = score();
     const cur = standing();
+    snap = stable && stable.length >= takeSnap().length - 1 ? stable : takeSnap();
+    snapGiantOk = bonus > 0;
+    const art = buildArt(reason, final);
     const cx = cur.length ? cur.reduce((s, u) => s + u.body.position.x, 0) / cur.length : 0;
     const mult = reason === 'giant' ? 1.7 : 1;
     timeScale = CFG.overSlowScale; engine.timing.timeScale = timeScale;
@@ -215,8 +274,69 @@ function start(ctx: GameContext) {
     const duration = startedFlag ? performance.now() - startMs : 0;
     finishTimer = window.setTimeout(() => {
       if (finished || destroyed) return; finished = true;
-      ctx.finish({ score: final, scoreText: `${final}人`, shareText: `おじさんを${final}人積みました！`, durationMs: Math.max(1, Math.round(duration + CFG.finishDelayMs)) });
+      ctx.finish({ score: final, scoreText: `${final}人`, shareText: `おじさんを${final}人積みました！`, durationMs: Math.max(1, Math.round(duration + CFG.finishDelayMs)), art });
     }, CFG.finishDelayMs);
+  }
+
+  function buildArt(reason: 'fall' | 'giant', final: number): ResultArt {
+    const items = snap, n = items.length;
+    const topY = n ? Math.min(...items.map(i => i.bt ?? i.y)) : 0;
+    const hUnits = Math.max(0, -topY), meters = Math.round(hUnits / CFG.baseH * 1.7 * 10) / 10;
+    const sorted = [...items].sort((a, b) => a.y - b.y);
+    const avgX = (a: Item[]) => a.length ? a.reduce((s, u) => s + u.x, 0) / a.length : 0;
+    const lean = hUnits > 1 ? Math.abs(avgX(sorted.slice(0, 3)) - avgX(sorted.slice(-3))) / hUnits : 0;
+    const wUnits = n ? Math.max(...items.map(i => i.bx1 ?? i.x)) - Math.min(...items.map(i => i.bx0 ?? i.x)) : 1;
+    const ratio = hUnits / Math.max(40, wUnits);
+    const cnt = (ty: UncleType) => items.filter(u => u.type === ty).length;
+    const heavy = n ? (cnt('fat') + cnt('muscle') + cnt('giant')) / n : 0, thin = n ? cnt('thin') / n : 0;
+    const hasSpecial = cnt('special') > 0, inverted = items.some(u => Math.cos(u.a) < -0.85);
+    const giantOk = snapGiantOk;
+    const [title, comment] = judgeTitle(final, lean, ratio, heavy, thin, hasSpecial, inverted, giantOk);
+    let cause = 'バランス崩れ';
+    if (reason === 'giant') cause = '巨大おじさん直撃';
+    else if (lastAuto) cause = '放置で自然落下';
+    else if (final <= 3) cause = '狙いのズレ';
+    else if (heavy >= 0.5) cause = '重すぎる土台';
+    else if (lean > 0.2) cause = '傾きすぎ';
+    let rare: string | undefined;
+    if (giantOk) rare = 'giant_ok'; else if (inverted) rare = 'inverted'; else if (hasSpecial && n >= 3) rare = 'gold'; else if (lean > 0.22 && n >= 6) rare = 'lean';
+    const facts = [{ label: '積んだ人数', value: `${final}人` }, { label: 'タワーの高さ', value: `${meters}m` }, { label: '崩壊原因', value: cause }];
+    if (giantOk) facts.push({ label: '巨大おじさん', value: '制覇！' });
+    const view: View = { x0: Math.min(-190, ...items.map(i => i.x - i.h * 0.6)), x1: Math.max(190, ...items.map(i => i.x + i.h * 0.6)), top: Math.min(-80, topY - 40), bottom: 70 };
+    const rf = frames.slice();
+    const rview: View = (() => {
+      const f0 = rf[0]; let top = topY - 60; if (f0) for (let i = 0; i < f0.ids.length; i++) top = Math.min(top, f0.d[i * 3 + 1] - 50);
+      return { x0: -300, x1: 300, top: Math.min(top, -120), bottom: 260 };
+    })();
+    const st = info;
+    return {
+      title, comment, facts, rare,
+      postVariants: [
+        `おじさんを${final}人積んだ結果、${title}が完成した。\nこれ超えられる人いる？😂`,
+        `${meters}mのおじさんタワーが「${cause}」で崩壊した。\n称号:${title}`,
+        `おじさん${final}人でタワー崩壊💥 ${comment}\n同じ高さまで積める？`,
+      ],
+      draw(g, w, h, t) {
+        sceneBg(g, w, h, final);
+        const hh = h * 0.62; g.save(); g.translate(0, h * 0.2); drawScene(g, w, hh, items, view, { plat: 0, over: false, t, platOn: true }); g.restore();
+        const u = Math.min(w, h * 1.1) / 400;
+        outlined(g, title, w / 2, h * 0.07, Math.max(14, Math.min(w * 0.075, 34 * u + 8)), '#ffd93d', 7);
+        outlined(g, `${final}人`, w / 2, h * 0.16, Math.max(24, 54 * u + 10), '#fff', 9);
+        outlined(g, `高さ ${meters}m ／ ${cause}`, w / 2, h * 0.9, Math.max(12, 20 * u + 4), '#fff', 5);
+        outlined(g, '崩壊！', w * 0.8, h * 0.27, Math.max(14, 28 * u + 6), '#ff5a5a', 6);
+        outlined(g, 'おじさんを積め！', w / 2, h * 0.96, Math.max(10, 14 * u + 4), 'rgba(255,255,255,0.7)', 4);
+      },
+      replay: rf.length > 5 ? {
+        durationSec: rf.length / 20,
+        draw(g, w, h, t) {
+          const f = rf[Math.max(0, Math.min(rf.length - 1, Math.floor(t * 20)))];
+          sceneBg(g, w, h, final);
+          const its: Item[] = f.ids.map((id, i) => { const m = st.get(id)!; return { type: m.type, skin: m.skin, h: m.h, seed: m.seed, x: f.d[i * 3], y: f.d[i * 3 + 1], a: f.d[i * 3 + 2] }; });
+          drawScene(g, w, h, its, rview, { plat: f.plat, over: f.over, t });
+          if (f.over) outlined(g, '崩壊！', w / 2, h * 0.12, Math.max(20, w * 0.1), '#ff5a5a', 8);
+        },
+      } : undefined,
+    };
   }
 
   function loseUncle(u: Uncle) {
@@ -241,7 +361,7 @@ function start(ctx: GameContext) {
         if (warnT <= 0) { newHolder(true); giantNext = false; }
         else if (Math.floor(warnT * 5) % 2 === 0) flash = Math.max(flash, 0.18);
       }
-      if (phase === 'aim' && startedFlag && aimT > CFG.autoDropSec) drop();
+      if (phase === 'aim' && startedFlag && aimT > CFG.autoDropSec) drop(true);
     }
     // 落下速度制限
     for (const u of uncles) {
@@ -251,6 +371,12 @@ function start(ctx: GameContext) {
       u.impact *= 0.93; u.happyT = Math.max(0, u.happyT - dt);
     }
     Engine.update(engine, STEP);
+    if (++stepN % 3 === 0) {
+      const act = uncles.filter(u => !u.removed && u.body.position.y < 1000), d = new Float32Array(act.length * 3);
+      act.forEach((u, i) => { d[i * 3] = u.body.position.x; d[i * 3 + 1] = u.body.position.y; d[i * 3 + 2] = u.body.angle; });
+      frames.push({ plat: platFall.y, over: phase === 'over', ids: act.map(u => u.id), d });
+      if (frames.length > 160) frames.shift();
+    }
 
     // 巨大着地後の安定補助
     if (judgeT > 0 && CFG.giantDamp < 1) {
@@ -294,7 +420,7 @@ function start(ctx: GameContext) {
     for (const u of tops) target = Math.max(target, -u.body.bounds.min.y);
     tH += (target - tH) * 0.06;
     const groundScreen = Math.max(hy() + 220, ch - 100);
-    const zt = Math.max(0.28, Math.min(1, (groundScreen - hy()) / (k * (tH + 260))));
+    const zt = Math.max(0.28, Math.min(CFG.zoomMax, (groundScreen - hy()) / (k * (tH + 260))));
     zoom += (zt - zoom) * 0.05;
     holderY = -Math.max(tH + 260, (groundScreen - hy()) / (k * zoom));
 
@@ -467,8 +593,7 @@ function start(ctx: GameContext) {
 
   function drawOne(u: Uncle, rank: number) {
     const b = u.body, h = u.h;
-    const ox = -Math.sin(b.angle) * -0.025 * h * -1, oy = Math.cos(b.angle) * 0.025 * h;
-    const px = b.position.x - Math.sin(b.angle) * 0.025 * h * -1 * -1 + 0 * ox, py = b.position.y - oy;
+    const px = b.position.x + Math.sin(b.angle) * 0.025 * h, py = b.position.y - Math.cos(b.angle) * 0.025 * h;
     let expr: Expr = 'idle', flail = 0;
     const wob = b.speed + Math.abs(b.angularVelocity) * 25;
     if (phase === 'over') { expr = u.seed % 2 < 1 ? 'dead' : 'cry'; flail = 1; }
@@ -539,7 +664,7 @@ function start(ctx: GameContext) {
   // 初期カメラ
   {
     const gs = Math.max(hy() + 220, ch - 100);
-    zoom = Math.max(0.28, Math.min(1, (gs - hy()) / (k * 260)));
+    zoom = Math.max(0.28, Math.min(CFG.zoomMax, (gs - hy()) / (k * 260)));
     holderY = -Math.max(260, (gs - hy()) / (k * zoom));
   }
   newHolder(false);

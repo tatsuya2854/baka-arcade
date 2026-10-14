@@ -1,7 +1,6 @@
 import type { ResultArt } from '../../core/types';
-import { drawBtn, drawBtn as _b } from './events';
+import { drawBtn } from './events';
 import { drawUncle } from '../../core/characters';
-void _b;
 
 /** 事件(演出)ごとの見出し断片と記事用の一行 */
 export const INCIDENTS: Record<string, { head: string; line: string; pri: number }> = {

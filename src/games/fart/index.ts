@@ -2,9 +2,10 @@ import type { GameModule, GameContext } from '../../core/types';
 import { drawUncle, drawBubble } from '../../core/characters';
 import { meta } from './meta';
 import { CFG } from './config';
+import { buildArt } from './art';
 
 type Kind = 'bird' | 'balloon' | 'storm' | 'plane' | 'ufo' | 'meteor';
-interface Obs { kind: Kind; x: number; y: number; vx: number; vy: number; rx: number; ry: number; ph: number; col: string; wrap: boolean; }
+interface Obs { near?: boolean; kind: Kind; x: number; y: number; vx: number; vy: number; rx: number; ry: number; ph: number; col: string; wrap: boolean; }
 interface Part { x: number; y: number; vx: number; vy: number; life: number; max: number; r: number; k: number; }
 
 const UPM = CFG.unitsPerMeter;
@@ -52,7 +53,7 @@ const mod: GameModule = {
     let maxAlt = 0, shake = 0, flash = 0, flashCol = '#fff';
     let banner: { text: string; t: number } | null = null;
     let msIdx = 0, dyingT = 0, bounced = false, rot = 0, spin = 0, bubbleTxt = '', bubbleT = 0, expr: 'idle' | 'happy' | 'angry' | 'wow' | 'scared' = 'idle';
-    let startAt = 0, finished = false, gasWarnT = 0, raf = 0, last = 0, lastTapAt = 0;
+    let taps = 0, peakGas = 0, overheat = 0, birdNear = 0, killer = 'ground', startAt = 0, finished = false, gasWarnT = 0, raf = 0, last = 0, lastTapAt = 0;
     const timers: number[] = [];
 
     const alt = () => Math.max(0, (py - CFG.playerH / 2) / UPM);
@@ -71,14 +72,14 @@ const mod: GameModule = {
       if (clientX !== undefined) tx = clamp((clientX - OX) / S, 36, W - 36);
       if (st === 'ready') {
         audio.unlock(); ctx.started(); audio.startBgm(1, 150);
-        st = 'play'; startAt = now; vy = CFG.launchImpulse; py += 4; jet = 0.35; expr = 'angry'; sinceTap = 0;
+        st = 'play'; startAt = now; vy = CFG.launchImpulse; py += 4; jet = 0.35; expr = 'angry'; sinceTap = 0; taps++;
         audio.sfx('fart', 2); puff(26, 1.3); shake = 6; lastTapAt = now; return;
       }
-      lastTapAt = now;
+      lastTapAt = now; taps++;
       const easy = playT < CFG.easyTime ? CFG.easyGasScale : 1;
       const eff = 1 - (1 - CFG.minEff) * clamp(gas, 0, 1) * easy;
       vy = clamp(vy + CFG.tapImpulse * eff, -CFG.maxFall, CFG.maxUp);
-      gas = clamp(gas + CFG.gasPerTap, 0, 1.05);
+      gas = clamp(gas + CFG.gasPerTap, 0, 1.05); peakGas = Math.max(peakGas, gas); if (gas > 0.85) overheat++;
       jet = 0.3; sinceTap = 0; expr = 'angry';
       audio.sfx('fart', Math.floor(Math.random() * 5));
       puff(Math.round(8 + 8 * eff), 0.6 + 0.5 * eff);
@@ -91,7 +92,8 @@ const mod: GameModule = {
     canvas.addEventListener('pointerdown', onDown);
     window.addEventListener('keydown', onKey);
 
-    function die(kind: 'hit' | 'ground') {
+    function die(kind: 'hit' | 'ground', by = 'ground') {
+      killer = by;
       if (st !== 'play') return;
       st = 'dying'; dyingT = 0; audio.stopBgm(); gas = 0;
       if (kind === 'hit') {
@@ -109,7 +111,8 @@ const mod: GameModule = {
     function finish() {
       if (finished) return; finished = true; st = 'done';
       const m = Math.floor(maxAlt);
-      ctx.finish({ score: m, scoreText: `${m}m`, shareText: `おならで${m}mまで飛びました！`, durationMs: Math.max(0, Math.round(performance.now() - startAt)) });
+      const durationMs = Math.max(0, Math.round(performance.now() - startAt));
+      ctx.finish({ score: m, scoreText: `${m}m`, shareText: `おならで${m}mまで飛びました！`, durationMs, art: buildArt({ m, taps, playSec: playT, peakGas, overheat, birdNear, death: killer === 'ground' ? 'ground' : 'hit', killer, maxVy: 0 }) });
     }
 
     // ---- obstacles ----
@@ -208,7 +211,8 @@ const mod: GameModule = {
             const c = o.ph % 3.2; // 2.4-2.7 予兆, 2.7-3.0 落雷
             if (c > 2.7 && c < 3.0 && Math.abs(px - o.x) < 14 + CFG.playerR * 0.5 && py < o.y && py > o.y - 220) hit = true;
           }
-          if (hit) die('hit');
+          if (hit) die('hit', o.kind);
+          else if (o.kind === 'bird' && !o.near && Math.hypot(px - o.x, py - o.y) < 85) { o.near = true; birdNear++; }
         }
       }
       // camera

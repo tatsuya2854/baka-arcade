@@ -68,7 +68,7 @@ export class Arcade extends DurableObject<Env> {
       this.sql.exec('DELETE FROM sessions WHERE sid=?', String(b.sid)); // 1回限り
       const elapsed = now - s.t0;
       if (elapsed < MIN_PLAY_MS || claimed > elapsed + SLACK_MS) return json({ ok: false, reason: 'time' });
-      const cap = Math.min(lim.maxScore, lim.maxPerSec * (elapsed / 1000) + 3);
+      const cap = Math.min(lim.maxScore, lim.maxPerSec * (elapsed / 1000) + 8);
       if (score > cap) return json({ ok: false, reason: 'implausible' });
       this.sql.exec('INSERT INTO scores(game,uid,nickname,score,at) VALUES(?,?,?,?,?)', game, uid, nickname, Math.round(score * 10) / 10, now);
       this.sql.exec('DELETE FROM scores WHERE at < ?', now - 400 * 864e5);

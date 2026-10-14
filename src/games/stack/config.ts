@@ -5,8 +5,8 @@ export const CFG = {
   // --- 見た目サイズ ---
   baseH: 64,            // 通常おじさんの身長
   giantScale: 1.5,      // 巨大おじさん倍率
-  bodyHRatio: 1.0,      // 当たり判定高さ/身長
-  bodyWRatio: 0.95,     // 当たり判定幅/見た目の胴体幅
+  bodyHRatio: 0.9,      // 当たり判定高さ/身長
+  bodyWRatio: 1.1,     // 当たり判定幅/見た目の胴体幅
   typeHScale: { normal: 1, fat: 0.95, thin: 1.1, muscle: 1.02, giant: 1, special: 1 } as Record<UncleType, number>,
 
   // --- 物理 ---
@@ -14,18 +14,19 @@ export const CFG = {
   friction: 1.0,
   frictionStatic: 2.0,
   restitution: 0.03,
-  specialRestitution: 0.3,   // special は少し弾む
+  specialRestitution: 0.12,   // special は少し弾む
   frictionAir: 0.012,
   density: 0.0016,
-  inertiaScale: 2.2,         // 回転しにくさ（大きいほど倒れにくい）
+  inertiaScale: 5,         // 回転しにくさ（大きいほど倒れにくい）
   slop: 0.05,
   positionIterations: 14,
   velocityIterations: 10,
   constraintIterations: 4,
   sleepThreshold: 45,
-  maxFallSpeed: 20,          // 1ステップあたり最大落下(トンネリング防止)
+  maxFallSpeed: 6.5,         // 1ステップあたり最大落下(着地の衝撃を抑える・トンネリング防止)
+  zoomMax: 1.2,
   giantMassScale: 0.65,      // 巨大の質量補正(TYPE_DIM.massに掛ける)
-  spinMax: 0.04,             // 投下時のランダム回転(最大, 難易度で増加)
+  spinMax: 0.006,             // 投下時のランダム回転(最大, 難易度で増加)
 
   // --- 土台 ---
   platformW: 290,
