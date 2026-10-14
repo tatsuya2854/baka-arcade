@@ -101,6 +101,13 @@ export class Arcade extends DurableObject<Env> {
       }
       return json({ ok: true });
     }
+    if (method === 'POST' && path === '/api/admin/purge') {
+      if (!adminToken || auth !== 'Bearer ' + adminToken) return json({ error: 'not found' }, 404);
+      const nick = clean(body?.nickname); if (!nick) return json({ error: 'nickname' }, 400);
+      const n = (this.sql.exec('SELECT COUNT(*) c FROM scores WHERE nickname=?', nick).toArray()[0] as { c: number }).c;
+      this.sql.exec('DELETE FROM ch WHERE nickname=?', nick); this.sql.exec('DELETE FROM scores WHERE nickname=?', nick);
+      return json({ deleted: n });
+    }
     if (method === 'GET' && path === '/api/stats') {
       if (!adminToken || auth !== 'Bearer ' + adminToken) return json({ error: 'not found' }, 404);
       const rows = this.sql.exec('SELECT day,k,n FROM ev ORDER BY day DESC LIMIT 600').toArray() as { day: string; k: string; n: number }[];

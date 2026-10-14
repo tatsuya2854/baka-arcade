@@ -26,14 +26,14 @@ export const CFG = {
   maxFallSpeed: 6.5,         // 1ステップあたり最大落下(着地の衝撃を抑える・トンネリング防止)
   zoomMax: 1.2,
   giantMassScale: 0.65,      // 巨大の質量補正(TYPE_DIM.massに掛ける)
-  spinMax: 0.006,             // 投下時のランダム回転(最大, 難易度で増加)
+  spinMax: 0.004,             // 投下時のランダム回転(最大, 難易度で増加)
 
   // --- 土台 ---
-  platformW: 290,
+  platformW: 320,
   platformThick: 40,
 
   // --- ルール ---
-  lives: 2,                  // これだけ落ちたらゲームオーバー
+  lives: 3,                  // これだけ落ちたらゲームオーバー
   loseY: 50,                 // 重心がこのY(土台上面=0)より下に落ちたら「落ちた」
   minInterval: 0.7,          // 次の1人が出るまでの最短秒
   maxWait: 2.4,              // 着地しなくても次が出る最大秒
@@ -41,10 +41,10 @@ export const CFG = {
   scream: 0.4,               // 落下開始時に叫ぶ確率
 
   // --- 速度カーブ(往復の角速度 rad/s) ---
-  omegaStart: 1.45,
-  omegaEnd: 3.3,
+  omegaStart: 1.2,
+  omegaEnd: 3.0,
   omegaRampCount: 40,        // この人数で omegaEnd
-  rangeStart: 85,            // 往復の振幅(序盤は土台の内側)
+  rangeStart: 70,            // 往復の振幅(序盤は土台の内側)
   rangeEnd: 150,
   rangeRampCount: 12,
 
