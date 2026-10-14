@@ -2,6 +2,7 @@ import type { GameModule, GameContext, GameInstance, ResultArt } from '../../cor
 import { drawUncle, drawBubble, type Expr } from '../../core/characters';
 import { meta } from './meta';
 import { CFG } from './config';
+import { Hair3D, type HairFrame } from './hair3d';
 
 interface Gust { s: number; d: number; peak: number; dir: number }
 interface Node { x: number; y: number; px: number; py: number }
@@ -48,13 +49,25 @@ function start(ctx: GameContext): GameInstance {
   const root = ctx.root, audio = ctx.audio;
   const cv = document.createElement('canvas');
   cv.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block;user-select:none;-webkit-user-select:none';
-  root.appendChild(cv);
-  const g = cv.getContext('2d')!;
+  const gTop = cv.getContext('2d')!;
+  let g = gTop;
+  // 3D描画（WebGL）。失敗したら従来の2D描画。重ね順: 背景2D → three → 前景2D(cv: 演出+HUD、入力もここ)
+  let st3: Hair3D | null = null, bgCv: HTMLCanvasElement | null = null, gBg: CanvasRenderingContext2D | null = null, use3d = false;
+  function disable3d() { use3d = false; if (bgCv) bgCv.style.display = 'none'; if (st3) st3.canvas.style.display = 'none'; g = gTop; }
+  try {
+    st3 = new Hair3D(() => disable3d());
+    bgCv = document.createElement('canvas'); bgCv.style.cssText = cv.style.cssText; gBg = bgCv.getContext('2d');
+    st3.canvas.style.cssText = cv.style.cssText + ';pointer-events:none';
+    if (!gBg) throw new Error('2d');
+    root.append(bgCv, st3.canvas, cv); use3d = true;
+  } catch { try { st3?.dispose(); } catch { /* ignore */ } st3 = null; bgCv = null; gBg = null; use3d = false; root.appendChild(cv); }
   let W = 390, H = 844, dpr = 1;
   const resize = () => {
     dpr = Math.min(window.devicePixelRatio || 1, 2);
     W = root.clientWidth || window.innerWidth; H = root.clientHeight || window.innerHeight;
     cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    if (bgCv) { bgCv.width = cv.width; bgCv.height = cv.height; }
+    st3?.resize(W, H, dpr);
   };
   resize();
   window.addEventListener('resize', resize);
@@ -295,6 +308,7 @@ function start(ctx: GameContext): GameInstance {
   }
   function drawParts() {
     for (const p of parts) {
+      if (use3d && p.k === 'hair') continue;
       const a = clamp(p.life / p.max * 3);
       g.save(); g.globalAlpha = a; g.translate(p.x, p.y);
       if (p.k === 'line') { g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = 2; g.beginPath(); g.moveTo(0, 0); g.lineTo(-Math.sign(p.vx) * p.size, 0); g.stroke(); }
@@ -363,19 +377,52 @@ function start(ctx: GameContext): GameInstance {
     g.lineWidth = Math.max(3, size / 6); g.strokeStyle = stroke; g.lineJoin = 'round'; g.strokeText(s, x, y); g.fillStyle = fill; g.fillText(s, x, y);
   }
 
+  const fr: HairFrame = {
+    W: 0, H: 0, cx: 0, uy: 0, h: 0, rx: 0, ry: 0, hr: 0, zoom: 1, zx: 0, zy: 0, shX: 0, shY: 0, wind: 0, expr: 'idle', flail: 0, stress: 0, dmg: 0, fatigue: 0, real: 0,
+    detached: false, over: false, overT: 0, nodes: hairNodes, hand: { x: 0, y: 0, rot: 0, t: 0, dir: 1 }, flying: [], nFlying: 0,
+  };
+  function handPose(l: ReturnType<typeof L>) {
+    const target = holding || (want && relCd <= 0) ? 1 : 0;
+    handT += (target - handT) * 0.3;
+    if (phase === 'over') handT *= 0.9;
+    const restX = l.cx + lastDir * l.hr * 2.1, restY = l.ry + l.hr * 2.2;
+    const shk = fatigue * fatigue * 5 + (dmg > 0.5 ? 2 : 0);
+    const px = l.rx + lastDir * l.hr * 0.4 + (Math.random() - 0.5) * shk, py = l.ry - l.hr * 0.12 + (Math.random() - 0.5) * shk;
+    return { x: lerp(restX, px, handT), y: lerp(restY, py, handT) };
+  }
+  function render3d(l: ReturnType<typeof L>, sx: number, sy: number) {
+    const hp = handPose(l);
+    fr.W = W; fr.H = H; fr.cx = l.cx; fr.uy = l.uy; fr.h = l.h; fr.rx = l.rx; fr.ry = l.ry; fr.hr = l.hr;
+    fr.zoom = zoom; fr.zx = l.cx; fr.zy = l.hcy - l.hr * 0.3; fr.shX = sx; fr.shY = sy;
+    fr.wind = wind; fr.expr = exprNow(); fr.flail = phase === 'over' ? 0.8 : stress > 0.6 ? 0.25 : 0;
+    fr.stress = stress; fr.dmg = dmg; fr.fatigue = fatigue; fr.real = real; fr.detached = detached; fr.over = phase === 'over'; fr.overT = overT;
+    fr.hand.x = hp.x; fr.hand.y = hp.y; fr.hand.t = handT; fr.hand.dir = lastDir;
+    let n = 0;
+    for (const p of parts) if (p.k === 'hair' && n < 32) { let q = fr.flying[n]; if (!q) q = fr.flying[n] = { x: 0, y: 0, rot: 0, size: 0, a: 1 }; q.x = p.x; q.y = p.y; q.rot = p.rot; q.size = p.size; q.a = clamp(p.life / p.max * 3); n++; }
+    fr.nFlying = n;
+    st3!.render(fr);
+  }
+
   function render() {
-    g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    drawBg();
     const l = L();
-    g.save();
     const sx = (Math.random() - 0.5) * shake * 2, sy = (Math.random() - 0.5) * shake * 2;
-    g.translate(sx, sy);
-    g.translate(l.cx, l.hcy - l.hr * 0.3); g.scale(zoom, zoom); g.translate(-l.cx, -(l.hcy - l.hr * 0.3));
-    // 風に合わせて体をわずかに傾ける
-    drawUncle(g, { x: l.cx, y: l.uy, h: l.h, rot: wind * 0.04, expr: exprNow(), t: real, bald: true, hairLen: 0, flail: phase === 'over' ? 0.8 : stress > 0.6 ? 0.25 : 0 });
-    drawHair();
-    drawHand();
-    g.restore();
+    if (use3d && st3 && gBg) {
+      g = gBg; g.setTransform(dpr, 0, 0, dpr, 0, 0); drawBg();
+      render3d(l, sx, sy);
+      g = gTop; g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height);
+    }
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (!use3d) {
+      drawBg();
+      g.save();
+      g.translate(sx, sy);
+      g.translate(l.cx, l.hcy - l.hr * 0.3); g.scale(zoom, zoom); g.translate(-l.cx, -(l.hcy - l.hr * 0.3));
+      // 風に合わせて体をわずかに傾ける
+      drawUncle(g, { x: l.cx, y: l.uy, h: l.h, rot: wind * 0.04, expr: exprNow(), t: real, bald: true, hairLen: 0, flail: phase === 'over' ? 0.8 : stress > 0.6 ? 0.25 : 0 });
+      drawHair();
+      drawHand();
+      g.restore();
+    }
     drawParts();
     if (flash > 0) { g.fillStyle = `rgba(255,255,255,${flash * 0.6})`; g.fillRect(0, 0, W, H); }
     // HUD
@@ -474,13 +521,17 @@ function start(ctx: GameContext): GameInstance {
   raf = requestAnimationFrame(loop);
   void startMs;
 
+  if (location.pathname.includes('dev')) (window as unknown as Record<string, unknown>).__hair = { get use3d() { return use3d; }, get phase() { return phase; }, get stress() { return stress; }, get dmg() { return dmg; } };
+
   return {
     destroy() {
       cancelAnimationFrame(raf); audio.stopBgm();
       window.removeEventListener('resize', resize); window.removeEventListener('keydown', kd); window.removeEventListener('keyup', ku);
       cv.removeEventListener('pointerdown', pd); cv.removeEventListener('pointerup', pu); cv.removeEventListener('pointercancel', pu);
       cv.removeEventListener('contextmenu', noCtx);
-      cv.remove(); parts.length = 0;
+      cv.remove(); bgCv?.remove(); parts.length = 0;
+      if (st3) { st3.dispose(); st3 = null; } use3d = false;
+      delete (window as unknown as Record<string, unknown>).__hair;
     },
   };
 }

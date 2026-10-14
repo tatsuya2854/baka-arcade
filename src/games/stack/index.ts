@@ -332,11 +332,8 @@ function start(ctx: GameContext) {
         sceneBg(g, w, h, final);
         const hh = h * 0.62; g.save(); g.translate(0, h * 0.2); drawScene(g, w, hh, items, view, { plat: 0, over: false, t, platOn: true }); g.restore();
         const u = Math.min(w, h * 1.1) / 400;
-        outlined(g, title, w / 2, h * 0.07, Math.max(14, Math.min(w * 0.075, 34 * u + 8)), '#ffd93d', 7);
-        outlined(g, `${final}人`, w / 2, h * 0.16, Math.max(24, 54 * u + 10), '#fff', 9);
         outlined(g, `高さ ${meters}m ／ ${cause}`, w / 2, h * 0.9, Math.max(12, 20 * u + 4), '#fff', 5);
-        outlined(g, '崩壊！', w * 0.8, h * 0.27, Math.max(14, 28 * u + 6), '#ff5a5a', 6);
-        outlined(g, 'おじさんを積め！', w / 2, h * 0.96, Math.max(10, 14 * u + 4), 'rgba(255,255,255,0.7)', 4);
+        outlined(g, '崩壊！', w * 0.78, h * 0.14, Math.max(14, 28 * u + 6), '#ff5a5a', 6);
       },
       replay: rf.length > 5 ? {
         durationSec: rf.length / 20,

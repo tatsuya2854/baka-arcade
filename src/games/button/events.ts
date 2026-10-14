@@ -15,10 +15,18 @@ export interface Fx {
   drawHud?(g: CanvasRenderingContext2D, p: number): void;
   tap?(x: number, y: number): boolean;
   end?(): void;
+  /** 3D描画時のみ呼ばれる: 追加の3Dボタン/おじさんを登録（2D時は draw が描く） */
+  r3?(r: R3, p: number): void;
+}
+/** 3D描画への登録口（座標は画面px、y下向き） */
+export interface R3 {
+  btn(x: number, y: number, r: number, rot: number, hue: number): void;
+  uncle(x: number, y: number, h: number, expr: Expr, flail: number, flip: boolean, rot: number): void;
 }
 export type FxInit = Omit<Fx, 't'>;
 export interface BurstOpt { colors?: string[]; speed?: number; angle?: number; spread?: number; life?: number; size?: number; grav?: number; rect?: boolean }
 export interface Game {
+  use3d: boolean;
   W: number; H: number; cx: number; cy: number; R: number; time: number;
   btn: { x: number; y: number; r: number };
   audio: AudioEngine;
@@ -68,11 +76,12 @@ const LINES = ['押すなって言ったのに', 'やめて…', 'くすぐっ�
 
 function uncleFx(G: Game, o: { expr: Expr; line: string; dur: number; shake?: number; tag?: string; low?: boolean }) {
   const side = Math.random() < 0.5 ? -1 : 1, h = G.H * 0.3, ux = G.W / 2 + side * G.W * 0.27;
+  const pos = (p: number) => { const rise = sm(c01(p / 0.2)) * (1 - sm(c01((p - 0.85) / 0.15))); return { rise, y: (G.H + h * 0.6) + (G.H * 0.78 - (G.H + h * 0.6)) * rise + (o.low ? 14 : 0) }; };
   G.add({ dur: o.dur, tag: o.tag, update(p, _d, _m, S) { if (o.shake) S.shake = Math.max(S.shake, o.shake * env(p)); },
+    r3(r, p) { r.uncle(ux, pos(p).y, h, o.expr, o.shake ? 0.9 : 0.15, side > 0, o.low ? 0.18 * Math.sin(G.time * 3) : 0); },
     draw(g, p) {
-      const rise = sm(c01(p / 0.2)) * (1 - sm(c01((p - 0.85) / 0.15)));
-      const y = (G.H + h * 0.6) + (G.H * 0.78 - (G.H + h * 0.6)) * rise + (o.low ? 14 : 0);
-      drawUncle(g, { x: ux, y, h, expr: o.expr, t: G.time, flail: o.shake ? 0.9 : 0.15, flip: side > 0, rot: o.low ? 0.18 * Math.sin(G.time * 3) : 0 });
+      const { rise, y } = pos(p);
+      if (!G.use3d) drawUncle(g, { x: ux, y, h, expr: o.expr, t: G.time, flail: o.shake ? 0.9 : 0.15, flip: side > 0, rot: o.low ? 0.18 * Math.sin(G.time * 3) : 0 });
       if (rise > 0.85) drawBubble(g, o.line, Math.min(G.W - 110, Math.max(110, ux)), y - h / 2 - 6, 20);
     } });
 }
@@ -136,9 +145,10 @@ export const EVENTS: GameEvent[] = [
     for (let i = 0; i < n; i++) { let best = { x: G.W / 2, y: G.H / 2 }; for (let k = 0; k < 40; k++) { const x = G.rnd(r + 8, G.W - r - 8), y = G.rnd(G.H * 0.27, G.H * 0.8); if (pts.every(q => Math.hypot(q.x - x, q.y - y) > r * 2.3)) { best = { x, y }; break; } best = { x, y }; } pts.push({ ...best, alive: true, ph: G.rnd(0, 7) }); }
     G.stat('spawn', n); const real = Math.floor(Math.random() * n); let done = false; G.sfx('whoosh'); G.tempo(185);
     const f = G.add({ dur: 9, block: true,
+      r3(b3) { pts.forEach((q, i) => { if (q.alive) b3.btn(q.x, q.y, r, i !== real ? Math.sin(G.time * 6 + q.ph) * 0.12 : 0, 0); }); },
       update(_p, _d, m) { m.hide = true; },
       draw(g, p) { txt(g, '本物はどれだ!', G.cx, G.H * 0.2, 30, '#ffd93d'); txt(g, '動かないのが本物…?', G.cx, G.H * 0.2 + 30, 14, '#fff');
-        pts.forEach((q, i) => { if (!q.alive) return; g.save(); g.translate(q.x, q.y); if (i !== real) g.rotate(Math.sin(G.time * 6 + q.ph) * 0.12); drawBtn(g, 0, 0, r, 0, 'PUSH', 0, false); g.restore(); });
+        pts.forEach((q, i) => { if (!q.alive || G.use3d) return; g.save(); g.translate(q.x, q.y); if (i !== real) g.rotate(Math.sin(G.time * 6 + q.ph) * 0.12); drawBtn(g, 0, 0, r, 0, 'PUSH', 0, false); g.restore(); });
         void p; },
       tap(x, y) { if (done) return true; for (let i = pts.length - 1; i >= 0; i--) { const q = pts[i]; if (!q.alive || !pointIn(x, y, q.x, q.y, r)) continue;
         if (i === real) { done = true; G.sfx('combo'); G.burst(q.x, q.y, 30, { colors: ['#ffd93d', '#fff'], speed: 300, life: 1, size: 7, grav: 250 }); G.say('正解! 本物!', 1.6); f.t = f.dur - 0.5; } else { q.alive = false; G.sfx('pop', i); G.burst(q.x, q.y, 10, { colors: ['#aaa'], speed: 160, life: 0.5, size: 5 }); }
@@ -147,7 +157,8 @@ export const EVENTS: GameEvent[] = [
   { id: 'sorry', name: 'おじさんに謝られる', unlock: 25, weight: 8, run(G) { G.sfx('squeak', 2); uncleFx(G, { expr: 'cry', line: 'ごめんなさい!!', dur: 3, low: true }); } },
   { id: 'fakebtn', name: '偽ボタン', unlock: 30, weight: 8, run(G) {
     const x = G.rnd(G.R * 0.5, G.W - G.R * 0.5), y = G.rnd(G.H * 0.72, G.H * 0.84), r = G.R * 0.45; G.sfx('pop'); G.say('こっちが本物だよ', 1.8);
-    const f = G.add({ dur: 4, draw(g, p) { const s = sm(c01(p / 0.1)) * (1 - sm(c01((p - 0.9) / 0.1))); drawBtn(g, x, y, r * s, 130, '押せ', 0, true); },
+    const f = G.add({ dur: 4, r3(b3, p) { const s = sm(c01(p / 0.1)) * (1 - sm(c01((p - 0.9) / 0.1))); if (s > 0.02) b3.btn(x, y, r * s, 0, 130); },
+      draw(g, p) { if (G.use3d) return; const s = sm(c01(p / 0.1)) * (1 - sm(c01((p - 0.9) / 0.1))); drawBtn(g, x, y, r * s, 130, '押せ', 0, true); },
       tap(tx, ty) { if (!pointIn(tx, ty, x, y, r)) return false; G.sfx('ng'); G.say('偽物でした〜', 1.6); G.burst(x, y, 12, { colors: ['#7be07b'], speed: 200, life: 0.6, size: 6 }); f.t = f.dur; return true; } }); } },
   { id: 'tap10', name: '3秒10連打チャレンジ', unlock: 30, weight: 7, run(G) {
     let n = 0, done = false; G.sfx('alarm'); G.tempo(190);
@@ -183,12 +194,13 @@ export const EVENTS: GameEvent[] = [
       end() { G.tempo(160); if (!done) result(G, false, '', '外れ…'); } }); } },
   { id: 'rain', name: 'ミニボタンの雨', unlock: 70, weight: 7, run(G) { G.sfx('whoosh'); G.say('ボタン注意報', 1.8); G.stat('spawn', 24);
     const R = Array.from({ length: 24 }, () => ({ x: G.rnd(10, G.W - 10), y: G.rnd(-G.H * 0.6, -10), v: G.rnd(250, 450), r: G.rnd(12, 22) }));
-    G.add({ dur: 3, update(_p, dt) { for (const q of R) q.y += q.v * dt; }, draw(g) { for (const q of R) drawBtn(g, q.x, q.y, q.r, 0, '', 0, false); } }); } },
+    G.add({ dur: 3, update(_p, dt) { for (const q of R) q.y += q.v * dt; }, r3(b3) { for (const q of R) if (q.y > -40 && q.y < G.H + 40) b3.btn(q.x, q.y, q.r, 0, 0); }, draw(g) { if (G.use3d) return; for (const q of R) drawBtn(g, q.x, q.y, q.r, 0, '', 0, false); } }); } },
   { id: 'dark', name: '停電', unlock: 80, weight: 7, run(G) { G.sfx('thud', 3); G.say('停電…?', 1.8); G.add({ dur: 2.8, update(p, _d, _m, S) { S.dim = Math.max(S.dim, 0.88 * c01(p / 0.15) * c01((1 - p) / 0.15)); } }); } },
   { id: 'quake', name: '大地震', unlock: 80, weight: 7, run(G) { G.sfx('thud', 1); G.say('ゴゴゴゴ…', 2); G.burst(G.cx, G.H, 20, { colors: ['#8a7a6a'], speed: 150, angle: -Math.PI / 2, spread: 1.2, life: 1.2, size: 8, grav: 200 });
     G.add({ dur: 2.2, update(p, _d, _m, S) { S.shake = Math.max(S.shake, 16 * env(p)); } }); } },
   { id: 'horde', name: '仲間が集結', unlock: 90, weight: 6, run(G) { G.sfx('combo'); G.say('仲間を連れてきた', 1.8); G.stat('spawn', 12);
-    G.add({ dur: 3.4, draw(g, p) { const a = env(c01(p * 1.1)); for (let i = 0; i < 12; i++) { const th = G.time * 1.5 + i / 12 * 7; drawBtn(g, G.btn.x + Math.cos(th) * G.btn.r * 1.7 * a, G.btn.y + Math.sin(th) * G.btn.r * 1.3 * a, G.R * 0.22, i * 30, '', 0, false); } } }); } },
+    G.add({ dur: 3.4, r3(b3, p) { const a = env(c01(p * 1.1)); for (let i = 0; i < 12; i++) { const th = G.time * 1.5 + i / 12 * 7; b3.btn(G.btn.x + Math.cos(th) * G.btn.r * 1.7 * a, G.btn.y + Math.sin(th) * G.btn.r * 1.3 * a, G.R * 0.22, 0, i * 30); } },
+      draw(g, p) { if (G.use3d) return; const a = env(c01(p * 1.1)); for (let i = 0; i < 12; i++) { const th = G.time * 1.5 + i / 12 * 7; drawBtn(g, G.btn.x + Math.cos(th) * G.btn.r * 1.7 * a, G.btn.y + Math.sin(th) * G.btn.r * 1.3 * a, G.R * 0.22, i * 30, '', 0, false); } } }); } },
   { id: 'waitgo', name: '反射神経チャレンジ', unlock: 90, weight: 6, run(G) {
     const goAt = G.rnd(1, 1.7); let done = false; G.sfx('alarm');
     const f = G.add({ dur: 3.4, block: true, update(_p, _d, m) { m.hide = true; },

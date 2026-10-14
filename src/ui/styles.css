@@ -80,3 +80,5 @@ h2::before{content:"";width:6px;height:18px;background:var(--pink);box-shadow:0 
 .rankb{display:inline-block;font-size:13px;padding:2px 8px;border-radius:99px;background:var(--rc);color:#111;vertical-align:middle}
 .shr.big button{padding:15px 4px;font-size:16px}.shr.big .prim{flex:2;background:linear-gradient(135deg,#ff3d81,#ff8a3d);border:0;color:#fff}
 .edit{width:100%;text-align:left}.edit summary{font-size:13px;color:var(--cyan);padding:6px 2px;cursor:pointer}.edit>*{margin-top:8px}
+.toast.bottom{top:auto;bottom:calc(var(--safe-b) + 18px);animation:tup .3s}@keyframes tup{from{transform:translate(-50%,20px);opacity:0}}
+.res{gap:8px}.res .score{font-size:34px}.res .atitle{font-size:22px}.res .retry{padding:14px;font-size:22px}.res .comment{font-size:14px}.res .new{font-size:16px}.res .artcv{margin-top:30px}

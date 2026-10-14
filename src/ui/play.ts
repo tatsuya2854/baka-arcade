@@ -16,7 +16,7 @@ import { fetchRareStat, rarityText } from '../core/rarity';
 import { genVariants } from '../core/post';
 
 const esc = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
-export function toast(msg: string) { const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.append(t); setTimeout(() => t.remove(), 2600); }
+export function toast(msg: string) { const t = document.createElement('div'); t.className = 'toast bottom'; t.textContent = msg; document.body.append(t); setTimeout(() => t.remove(), 2600); }
 const TAGS: Record<string, string> = { stack: '#おじさんを積め', fart: '#おならエレベーター', hair: '#ハゲを守れ', nose: '#鼻毛を抜け', button: '#絶対に押すなボタン' };
 
 export function renderPlay(app: HTMLElement, id: string, challenge?: Challenge): () => void {
@@ -63,7 +63,7 @@ export function renderPlay(app: HTMLElement, id: string, challenge?: Challenge):
     track('game_over', { game: m.id, score: r.score, dur: Math.round(r.durationMs / 1000), best: isBest, rare: r.art?.rare ?? '' });
     audio.stopBgm();
     const rare = register(m, r.art?.rare);
-    if (rare.isNew) { audio.sfx('unlock'); toast(`✨ レア発見！ ${rare.name}（図鑑に登録）`); }
+    if (rare.isNew) audio.sfx('unlock'); // 表示は結果画面のレアチップに集約
     track('result_view', { game: m.id, rare: !!r.art?.rare });
     showResult(m, r, isBest, gain, checkAchievements().map(a => `${a.emoji} 実績「${a.name}」`), rare);
   }
@@ -107,7 +107,7 @@ export function renderPlay(app: HTMLElement, id: string, challenge?: Challenge):
       <div class="next">${recs.map(x => card(x)).join('')}</div>
       <button class="link" id="home">ホームへ戻る</button></div>`;
     // 結果アートを大きく表示（何も操作しなくても動く）
-    const cv = layer.querySelector<HTMLCanvasElement>('#art')!, dpr = Math.min(2, devicePixelRatio || 1), cw = Math.min(innerWidth - 40, 420), ch = Math.round(Math.min(cw * 1.0, innerHeight * 0.42));
+    const cv = layer.querySelector<HTMLCanvasElement>('#art')!, dpr = Math.min(2, devicePixelRatio || 1), cw = Math.min(innerWidth - 40, 420), ch = Math.round(Math.min(cw * 0.9, innerHeight * 0.34));
     cv.width = cw * dpr; cv.height = ch * dpr; cv.style.width = cw + 'px'; cv.style.height = ch + 'px';
     const g = cv.getContext('2d')!; let rpStart = 0, replaying = false; const t0 = performance.now();
     const loop = () => {

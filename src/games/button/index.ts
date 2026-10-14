@@ -6,6 +6,7 @@ import type { Fx, FxInit, Game, GameEvent, Mod, Scr, BurstOpt } from './events';
 import { drawBubble } from '../../core/characters';
 import { load, mutate } from '../../core/storage';
 import { buildArt } from './news';
+import { View3D } from './view3d';
 
 interface Saved { total: number; found: string[]; ending: boolean }
 interface Part { x: number; y: number; vx: number; vy: number; life: number; max: number; size: number; color: string; grav: number; rect: boolean }
@@ -18,8 +19,18 @@ const mod: GameModule = {
     const root = ctx.root, audio = ctx.audio;
     const canvas = document.createElement('canvas');
     canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block;';
-    root.appendChild(canvas);
-    const g = canvas.getContext('2d')!;
+    const gTop = canvas.getContext('2d')!;
+    let g = gTop;
+    // 3D描画（WebGL）。失敗したら従来の2D描画のまま。重ね順: 背景2D → three → 前景2D(canvas: 演出+HUD)
+    let view: View3D | null = null, bgCanvas: HTMLCanvasElement | null = null, gBg: CanvasRenderingContext2D | null = null, use3d = false;
+    function disable3d() { use3d = false; G.use3d = false; if (bgCanvas) bgCanvas.style.display = 'none'; if (view) view.canvas.style.display = 'none'; g = gTop; }
+    try {
+      view = new View3D(() => disable3d());
+      bgCanvas = document.createElement('canvas'); bgCanvas.style.cssText = canvas.style.cssText; gBg = bgCanvas.getContext('2d');
+      view.canvas.style.cssText = canvas.style.cssText + ';pointer-events:none';
+      if (!gBg) throw new Error('2d');
+      root.append(bgCanvas, view.canvas, canvas); use3d = true;
+    } catch { try { view?.dispose(); } catch { /* ignore */ } view = null; bgCanvas = null; gBg = null; use3d = false; root.appendChild(canvas); }
     const raw = (load().extra['button'] ?? {}) as Partial<Saved>;
     const data: Saved = { total: raw.total ?? 0, found: Array.isArray(raw.found) ? raw.found.filter(x => EVENTS.some(e => e.id === x)) : [], ending: !!raw.ending };
     const found = new Set(data.found);
@@ -33,7 +44,7 @@ const mod: GameModule = {
     let m: Mod = newMod(), S: Scr = { rot: 0, shake: 0, dim: 0 };
 
     const G: Game = {
-      W: 390, H: 844, cx: 195, cy: 422, R: 100, time: 0, btn: { x: 195, y: 422, r: 100 }, audio,
+      use3d, W: 390, H: 844, cx: 195, cy: 422, R: 100, time: 0, btn: { x: 195, y: 422, r: 100 }, audio,
       add(f: FxInit) { const fx: Fx = { t: 0, ...f }; fxs.push(fx); return fx; },
       has(tag) { return fxs.some(f => f.tag === tag); },
       say(text, dur = 1.5) {
@@ -63,6 +74,8 @@ const mod: GameModule = {
     function resize() {
       const W = root.clientWidth || 390, H = root.clientHeight || 844; dpr = Math.min(window.devicePixelRatio || 1, 2);
       canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+      if (bgCanvas) { bgCanvas.width = canvas.width; bgCanvas.height = canvas.height; }
+      view?.resize(W, H, dpr);
       G.W = W; G.H = H; G.cx = W / 2; G.cy = H * 0.5; G.R = Math.min(W, H) * C.btnRadiusRatio;
     }
     resize();
@@ -152,17 +165,39 @@ const mod: GameModule = {
       draw();
     }
 
-    function draw() {
-      const W = G.W, H = G.H;
-      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    function paintBg(W: number, H: number) {
       const bg = g.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#16121f'); bg.addColorStop(1, '#2a0d12'); g.fillStyle = bg; g.fillRect(0, 0, W, H);
       g.save(); g.translate(W / 2, H / 2); g.rotate(S.rot); g.translate(-W / 2 + Math.sin(G.time * 57) * S.shake, -H / 2 + Math.cos(G.time * 61) * S.shake);
       g.fillStyle = 'rgba(255,60,60,.05)'; for (let i = 0; i < 6; i++) { g.beginPath(); g.arc(W / 2, H / 2, G.R * (1.6 + i * 0.5 + Math.sin(G.time * 1.5 + i) * 0.05), 0, 7); g.fill(); }
+      g.restore();
+    }
+    function draw() {
+      const W = G.W, H = G.H;
+      if (use3d && view && gBg) {
+        g = gBg; g.setTransform(dpr, 0, 0, dpr, 0, 0); paintBg(W, H);
+        view.beginFrame(-Math.sin(G.time * 57) * S.shake, Math.cos(G.time * 61) * S.shake, S.rot);
+        const idle = started ? 1 : 1 + Math.sin(G.time * 4) * 0.03;
+        view.main(G.btn.x, G.btn.y, G.R * m.s, m.sx * idle, m.sy * idle, m.rot, m.hue ?? 0, m.alpha, pressAnim, !m.hide);
+        for (const f of fxs) f.r3?.(view, Math.min(1, f.t / f.dur));
+        view.render();
+        g = gTop; g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, canvas.width, canvas.height);
+        g.setTransform(dpr, 0, 0, dpr, 0, 0); paintFg(W, H, true); return;
+      }
+      g = gTop; g.setTransform(dpr, 0, 0, dpr, 0, 0); paintBg(W, H); paintFg(W, H, false);
+    }
+    function paintFg(W: number, H: number, is3d: boolean) {
+      g.save(); g.translate(W / 2, H / 2); g.rotate(S.rot); g.translate(-W / 2 + Math.sin(G.time * 57) * S.shake, -H / 2 + Math.cos(G.time * 61) * S.shake);
       const ttl = G.time < titleUntil ? titleText : '絶対に押すな';
       txt(g, ttl, W / 2, H * 0.17 + Math.sin(G.time * 3) * 3, Math.min(40, W / (ttl.length * 0.9 + 1)), '#ffe14d', '#300');
       if (!started) txt(g, 'ボタンを押すと60秒スタート', W / 2, H * 0.17 + 40, 15, '#fff');
+      if (is3d && !m.hide && m.label !== null && m.alpha > 0.02 || is3d && !m.hide && m.alpha > 0.02) {
+        const r = G.R * m.s, p3 = Math.max(0, Math.min(1, pressAnim)), depth = 0.3 * p3 * Math.cos((1 - p3) * 6), idle = started ? 1 : 1 + Math.sin(G.time * 4) * 0.03;
+        const lab = m.label ?? 'PUSH';
+        g.save(); g.globalAlpha = Math.max(0, Math.min(1, m.alpha)); g.translate(G.btn.x, G.btn.y); g.rotate(m.rot); g.scale(m.sx * idle, m.sy * idle);
+        txt(g, lab, 0, -r * (0.26 - depth * 0.5), Math.max(10, r * (lab.length > 3 ? 0.24 : 0.32)), '#fff', 'rgba(90,0,0,.7)'); g.restore();
+      }
       for (const f of fxs) if (f.draw && f.tag !== 'say') f.draw(g, Math.min(1, f.t / f.dur));
-      if (!m.hide) {
+      if (!is3d && !m.hide) {
         g.save(); g.globalAlpha = Math.max(0, Math.min(1, m.alpha)); g.translate(G.btn.x, G.btn.y); g.rotate(m.rot);
         const idle = started ? 1 : 1 + Math.sin(G.time * 4) * 0.03; g.scale(m.sx * idle, m.sy * idle);
         drawBtn(g, 0, 0, G.R * m.s, m.hue ?? 0, m.label ?? 'PUSH', pressAnim, true); g.restore();
@@ -196,7 +231,8 @@ const mod: GameModule = {
     return {
       destroy() {
         cancelAnimationFrame(raf); window.removeEventListener('keydown', onKey); window.removeEventListener('resize', resize); ro?.disconnect();
-        canvas.removeEventListener('pointerdown', onDown); audio.stopBgm(); saveNow(); fxs = []; parts = []; canvas.remove();
+        canvas.removeEventListener('pointerdown', onDown); audio.stopBgm(); saveNow(); fxs = []; parts = []; canvas.remove(); bgCanvas?.remove();
+        if (view) { view.dispose(); view = null; } use3d = false;
       },
     };
   },

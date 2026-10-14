@@ -3,6 +3,7 @@ import { drawUncle, drawBubble } from '../../core/characters';
 import { meta } from './meta';
 import { CFG } from './config';
 import { buildArt } from './art';
+import { Fart3D } from './stage3d';
 
 type Kind = 'bird' | 'balloon' | 'storm' | 'plane' | 'ufo' | 'meteor';
 interface Obs { near?: boolean; kind: Kind; x: number; y: number; vx: number; vy: number; rx: number; ry: number; ph: number; col: string; wrap: boolean; }
@@ -30,15 +31,28 @@ const mod: GameModule = {
     const { root, audio } = ctx;
     const canvas = document.createElement('canvas');
     canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block;';
-    root.appendChild(canvas);
-    const g = canvas.getContext('2d')!;
+    const gTop = canvas.getContext('2d')!;
+    let g = gTop;
+    // 3D描画（WebGL）。失敗したら従来の2D描画のまま。重ね順: 背景2D → three → 前景2D(canvas: 演出+HUD。入力もここ)
+    let stage: Fart3D | null = null, bgCanvas: HTMLCanvasElement | null = null, gBg: CanvasRenderingContext2D | null = null, use3d = false;
+    let dprC = 1;
+    const disable3d = () => { use3d = false; if (bgCanvas) bgCanvas.style.display = 'none'; if (stage) stage.canvas.style.display = 'none'; g = gTop; };
+    try {
+      stage = new Fart3D(() => disable3d());
+      bgCanvas = document.createElement('canvas'); bgCanvas.style.cssText = canvas.style.cssText; gBg = bgCanvas.getContext('2d');
+      stage.canvas.style.cssText = canvas.style.cssText + 'pointer-events:none;';
+      if (!gBg) throw new Error('2d');
+      root.append(bgCanvas, stage.canvas, canvas); use3d = true;
+    } catch { try { stage?.dispose(); } catch { /* ignore */ } stage = null; bgCanvas = null; gBg = null; use3d = false; root.appendChild(canvas); }
     let W = 390, H = 844, S = 1, OX = 0, CW = 0, CH = 0;
     const resize = () => {
-      const dpr = window.devicePixelRatio || 1;
+      const dpr = dprC = stage ? Math.min(window.devicePixelRatio || 1, 2) : (window.devicePixelRatio || 1);
       CW = root.clientWidth || window.innerWidth; CH = root.clientHeight || window.innerHeight;
       canvas.width = Math.round(CW * dpr); canvas.height = Math.round(CH * dpr);
       S = Math.min(CW / 390, CH / 640); W = Math.min(CW / S, 460); H = CH / S; OX = (CW - W * S) / 2;
-      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      gTop.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (bgCanvas && gBg) { bgCanvas.width = canvas.width; bgCanvas.height = canvas.height; gBg.setTransform(dpr, 0, 0, dpr, 0, 0); }
+      stage?.resize(CW, CH, dpr);
     };
     resize();
     window.addEventListener('resize', resize);
@@ -403,23 +417,48 @@ const mod: GameModule = {
       }
     }
 
+    function fx(c: CanvasRenderingContext2D, sx: number, sy2: number) {
+      c.save(); c.clearRect(0, 0, CW, CH); c.translate(OX, 0); c.scale(S, S); c.translate(sx, sy2);
+    }
+    function speedLines() {
+      if (st === 'play' && vy > 380) { g.strokeStyle = `rgba(255,255,255,${(vy - 380) / 600})`; g.lineWidth = 2; for (let i = 0; i < 8; i++) { const x = hash(i + Math.floor(t * 12)) * W, y = hash(i * 7 + Math.floor(t * 12)) * H; g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 40 + vy * 0.05); g.stroke(); } }
+    }
+    function overlay() {
+      if (flash > 0) { g.globalAlpha = clamp(flash * 2, 0, 0.6); g.fillStyle = flashCol; g.fillRect(-OX / S - 4, -4, CW / S + 8, H + 8); g.globalAlpha = 1; }
+      drawHud();
+    }
+    function render3d() {
+      const stg = stage!;
+      const sx = shake > 0 ? rnd(-shake, shake) : 0, sy2 = shake > 0 ? rnd(-shake, shake) : 0;
+      g = gBg!; fx(g, sx, sy2); drawBg(); speedLines(); g.restore();
+      stg.setMap(S, OX, H, camY, sx, sy2); stg.begin();
+      for (const o of obs) if (o.y > camY - 120 && o.y < camY + H + 160) stg.obstacle(o);
+      const jp = st === 'play' ? clamp(jet / 0.3, 0, 1) : 0, dead = st === 'dying' && dyingT > 0.6;
+      stg.parts(parts, H);
+      const ex = dead ? 'dead' : expr;
+      stg.player(px, py, CFG.playerH, st === 'dying' ? rot : tilt, ex, st === 'play' ? clamp(Math.abs(vy) / 500, 0.2, 1) : st === 'dying' ? 1 : 0, t, jp,
+        st === 'dying' ? rot * 0.35 : tilt * 2.2 + Math.sin(t * 2) * 0.12, st === 'play' ? -clamp(vy / CFG.maxUp, -1, 1) * 0.18 : 0, true);
+      stg.end(); stg.render();
+      g = gTop; fx(g, sx, sy2);
+      if (bubbleT > 0) drawBubble(g, bubbleTxt, clamp(px, 70, W - 70), sy(py) - CFG.playerH * 0.7, 20);
+      overlay(); g.restore();
+    }
     function render() {
-      g.save(); g.clearRect(0, 0, CW, CH);
+      if (use3d && stage && gBg) { render3d(); return; }
+      g = gTop; g.save(); g.clearRect(0, 0, CW, CH);
       g.translate(OX, 0); g.scale(S, S);
       if (shake > 0) g.translate(rnd(-shake, shake), rnd(-shake, shake));
-      drawBg();
-      // speed lines
-      if (st === 'play' && vy > 380) { g.strokeStyle = `rgba(255,255,255,${(vy - 380) / 600})`; g.lineWidth = 2; for (let i = 0; i < 8; i++) { const x = hash(i + Math.floor(t * 12)) * W, y = hash(i * 7 + Math.floor(t * 12)) * H; g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 40 + vy * 0.05); g.stroke(); } }
+      drawBg(); speedLines();
       for (const o of obs) drawObs(o);
       drawParts();
       drawPlayer();
-      if (flash > 0) { g.globalAlpha = clamp(flash * 2, 0, 0.6); g.fillStyle = flashCol; g.fillRect(-OX / S - 4, -4, CW / S + 8, H + 8); g.globalAlpha = 1; }
-      drawHud();
+      overlay();
       g.restore();
     }
 
     function frame(ts: number) {
       raf = requestAnimationFrame(frame);
+    if (location.pathname.includes('dev')) (window as any).__fart = { get use3d() { return use3d; }, tap, get st() { return st; }, get alt() { return alt(); } };
       const dt = Math.min(0.033, last ? (ts - last) / 1000 : 0.016); last = ts;
       update(dt); render();
     }
@@ -429,7 +468,8 @@ const mod: GameModule = {
       destroy() {
         cancelAnimationFrame(raf); timers.forEach(clearTimeout);
         canvas.removeEventListener('pointerdown', onDown); window.removeEventListener('keydown', onKey); window.removeEventListener('resize', resize);
-        audio.stopBgm(); canvas.remove(); finished = true; void lastTapAt;
+        audio.stopBgm(); canvas.remove(); bgCanvas?.remove(); if (stage) { stage.dispose(); stage = null; } use3d = false; finished = true; void lastTapAt; void dprC;
+        delete (window as any).__fart;
       },
     };
   },
