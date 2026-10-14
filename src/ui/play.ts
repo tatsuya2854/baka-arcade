@@ -9,6 +9,8 @@ import { beginSession, submitScore } from '../core/ranking';
 import { drawPoster, posterBlob, recordReplay, FMT, type Fmt } from '../core/art';
 import { openX, openLine, webShare, saveImage } from '../core/share';
 import { register } from '../core/codex';
+import { ICON } from './icons';
+import { pic, hasImg } from '../core/images';
 import { selfUrl, verifiedUrl, type Challenge } from '../core/challenge';
 import { card } from './hub';
 import { renderStart } from './start';
@@ -24,12 +26,12 @@ export function renderPlay(app: HTMLElement, id: string, challenge?: Challenge):
   const meta = ALL_META.find(m => m.id === id);
   if (!meta) { go('/'); return () => {}; }
   app.innerHTML = `<div class="play"><div class="groot" id="groot"></div>
-    <div class="pbar"><button id="back" aria-label="ホームへ">⌂</button><button id="mute" aria-label="ミュート">${audio.muted ? '🔇' : '🔊'}</button></div>
+    <div class="pbar"><button id="back" aria-label="ホームへ">⌂</button><button id="mute" aria-label="ミュート">${audio.muted ? ICON.mute : ICON.sound}</button></div>
     <div id="layer"></div></div>`;
   const root = app.querySelector<HTMLElement>('#groot')!, layer = app.querySelector<HTMLElement>('#layer')!;
   let inst: GameInstance | null = null, alive = true, runToken = 0, startedAt = 0, hasStarted = false, raf = 0;
   app.querySelector('#back')!.addEventListener('click', () => go('/'));
-  app.querySelector('#mute')!.addEventListener('click', e => { audio.setMuted(!audio.muted); (e.currentTarget as HTMLElement).textContent = audio.muted ? '🔇' : '🔊'; });
+  app.querySelector('#mute')!.addEventListener('click', e => { audio.setMuted(!audio.muted); (e.currentTarget as HTMLElement).innerHTML = audio.muted ? ICON.mute : ICON.sound; });
   let stopDemo: (() => void) | null = null;
   const teardown = () => { stopDemo?.(); runToken++; cancelAnimationFrame(raf); try { inst?.destroy(); } catch (e) { console.warn(e); } inst = null; audio.stopBgm(); root.innerHTML = ''; };
   const fmtScore = (v: number) => meta.id === 'hair' ? v.toFixed(1) : String(Math.round(v));
@@ -65,9 +67,10 @@ export function renderPlay(app: HTMLElement, id: string, challenge?: Challenge):
     const rare = register(m, r.art?.rare);
     if (rare.isNew) audio.sfx('unlock'); // 表示は結果画面のレアチップに集約
     track('result_view', { game: m.id, rare: !!r.art?.rare });
-    showResult(m, r, isBest, gain, checkAchievements().map(a => `${a.emoji} 実績「${a.name}」`), rare);
+    showResult(m, r, isBest, gain, checkAchievements().map(a => `実績「${a.name}」`), rare);
   }
 
+  const resBg = (slug: string, rk: string) => { const id = 'SAB'.includes(rk) && hasImg(slug, 'result_good') ? 'result_good' : hasImg(slug, 'result_bad') ? 'result_bad' : hasImg(slug, 'result_good') ? 'result_good' : ''; return id ? pic(slug, id, 'resbg') : ''; };
   function showResult(m: GameMeta, r: GameResult, isBest: boolean, gain: ReturnType<typeof award>, notes: string[], rare: { isNew: boolean; name?: string }) {
     const s = load(), art = r.art;
     const nextU = UNLOCKABLES.filter(u => !s.unlocked.includes(u.id) && u.kind === 'skin')[0];
@@ -83,26 +86,27 @@ export function renderPlay(app: HTMLElement, id: string, challenge?: Challenge):
     const chUrl = () => cid ? verifiedUrl(cid) : selfUrl(m.id, r.score, load().nickname);
     const shareUrl = chUrl; // 共有リンク=挑戦状リンク（開くと同じゲームをすぐ遊べる）
     layer.innerHTML = `<div class="ov res" style="--c:${m.color}">
+      ${resBg(m.slug, rank)}
       <canvas id="art" class="artcv"></canvas>
-      ${rare.name ? `<div class="chip bp" id="rarechip">✨ レア結果：${esc(rare.name)}${rare.isNew ? '（NEW！図鑑登録）' : ''}<br><span class="muted" id="rate">出現率を集計中…</span></div>` : ''}
+      ${rare.name ? `<div class="chip bp" id="rarechip">レア結果：${esc(rare.name)}${rare.isNew ? '（NEW！図鑑登録）' : ''}<br><span class="muted" id="rate">出現率を集計中…</span></div>` : ''}
       <div class="atitle">${esc(art?.title ?? r.scoreText)} <span class="rankb" style="--rc:${RANK_COLOR[rank]}">RANK ${rank}</span></div>
       <div class="score">${esc(r.scoreText)}</div>
-      ${isBest ? '<div class="new">🎉 自己ベスト更新！</div>' : ''}
+      ${isBest ? '<div class="new">自己ベスト更新！</div>' : ''}
       <div class="comment">${esc(art?.comment ?? '')}</div>
       <div class="chip" id="pct" style="display:none"></div>
-      ${beat != null ? `<div class="chip ${beat ? 'bp' : ''}">${beat ? '🏆 挑戦状に勝利！' : `あと ${fmtScore(challenge!.score - r.score)}${m.scoreUnit}…惜しい！`}</div>` : ''}
+      ${beat != null ? `<div class="chip ${beat ? 'bp' : ''}">${beat ? '挑戦状に勝利！' : `あと ${fmtScore(challenge!.score - r.score)}${m.scoreUnit}…惜しい！`}</div>` : ''}
       <button class="retry" id="retry" disabled>もう一回！</button>
-      <div class="shr big"><button id="sp" class="prim">📤 結果を共有</button><button id="sx2">𝕏で投稿</button></div>
+      <div class="shr big"><button id="sp" class="prim">結果を共有</button><button id="sx2">𝕏で投稿</button></div>
       <details class="edit"><summary>投稿文を編集・他の共有方法</summary>
       <textarea id="ptext" class="ptext" rows="4" maxlength="200">${esc(textFor())}</textarea>
-      <div class="shr"><button id="sx">𝕏で共有</button><button id="sl">LINE</button><button id="ss">📤 画像つき共有</button><button id="sv">🔁 文案</button></div>
+      <div class="shr"><button id="sx">𝕏で共有</button><button id="sl">LINE</button><button id="ss">画像つき共有</button><button id="sv">文案を変える</button></div>
       <div class="tabs" id="fmts">${(Object.keys(FMT) as Fmt[]).map(k => `<button class="tab ${k === fmt ? 'on' : ''}" data-f="${k}">${FMT[k].label}</button>`).join('')}</div>
-      <div class="shr"><button id="si">💾 画像を保存</button><button id="sc">🔗 挑戦状リンク</button><button id="sk">📋 文をコピー</button></div>
-      ${art?.replay ? `<div class="shr"><button id="rp">▶ 崩壊リプレイ(スロー)</button><button id="rv">🎬 縦型動画を保存</button></div>` : ''}
+      <div class="shr"><button id="si">画像を保存</button><button id="sc">挑戦状リンク</button><button id="sk">文をコピー</button></div>
+      ${art?.replay ? `<div class="shr"><button id="rp">リプレイ（スロー）</button><button id="rv">縦型動画を保存</button></div>` : ''}
       </details><div class="muted" id="smsg">※Xへの画像の自動添付はできません。「画像を保存」してから投稿に添付してください（自動投稿はしません）</div>
       <div style="width:100%;text-align:left"><b style="color:var(--gold)">${gain.gained > 0 ? `+${gain.gained} BP` : 'BPなし'}</b> <span class="muted">${gain.capped ? '（本日の上限）' : gain.gained === 0 ? '（3秒以上・得点が必要）' : ''} 合計 ${s.bp}BP</span>
         <div class="bpbar"><i style="width:${pct}%"></i></div><div class="muted">${nextU ? `次: ${esc(nextU.name)}（${nextU.cost}BP）` : '全キャラ解放済み'}　自己ベスト ${esc(String(s.best[m.id] ?? '-'))}${m.scoreUnit}</div></div>
-      ${[...gain.newlyUnlocked.map(u => `${u.emoji} 解放: ${u.name}`), ...notes].map(t => `<div class="chip bp">${esc(t)}</div>`).join('')}
+      ${[...gain.newlyUnlocked.map(u => `解放: ${u.name}`), ...notes].map(t => `<div class="chip bp">${esc(t)}</div>`).join('')}
       <div id="nickbox" style="width:100%"></div>
       <div class="muted" style="width:100%;text-align:left">他のゲームに挑戦</div>
       <div class="next">${recs.map(x => card(x)).join('')}</div>
@@ -121,7 +125,7 @@ export function renderPlay(app: HTMLElement, id: string, challenge?: Challenge):
     loop();
     layer.querySelector('#rp')?.addEventListener('click', () => { replaying = true; rpStart = performance.now(); });
     setTimeout(() => layer.querySelector<HTMLButtonElement>('#retry')?.removeAttribute('disabled'), 700);
-    for (const u of gain.newlyUnlocked) { audio.sfx('unlock'); toast(`${u.emoji} ${u.name} を解放！`); }
+    for (const u of gain.newlyUnlocked) { audio.sfx('unlock'); toast(`${u.name} を解放！`); }
     const $ = <T extends HTMLElement>(q: string) => layer.querySelector<T>(q)!;
     const msg = (t: string) => { $('#smsg').textContent = t; };
     const ptext = () => $<HTMLTextAreaElement>('#ptext').value;

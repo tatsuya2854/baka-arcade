@@ -20,7 +20,7 @@ export function drawPoster(g: CanvasRenderingContext2D, meta: GameMeta, r: GameR
   g.strokeStyle = meta.color + '2a'; g.lineWidth = 2; for (let x = -W; x < W * 2; x += 90 * S) { g.beginPath(); g.moveTo(W / 2, H * 0.55); g.lineTo(x, H); g.stroke(); }
   g.textAlign = 'left'; g.textBaseline = 'alphabetic';
   g.fillStyle = '#ff3d81'; g.font = font(900, 40 * S); g.fillText('BAKA ARCADE', 36 * S, 62 * S);
-  g.fillStyle = meta.color; g.font = font(900, 38 * S); g.textAlign = 'right'; g.fillText(`${meta.emoji} ${meta.title}`, W - 36 * S, 62 * S); g.textAlign = 'left';
+  g.fillStyle = meta.color; g.font = font(900, 38 * S); g.textAlign = 'right'; g.fillText(meta.title, W - 36 * S, 62 * S); g.textAlign = 'left';
   // アート領域
   const pad = 36 * S, top = 90 * S;
   const artW = wide ? W * 0.5 : W - pad * 2, artH = wide ? H - top - 70 * S : o.fmt === 'ig' ? H * 0.5 : H * 0.46;
@@ -30,7 +30,7 @@ export function drawPoster(g: CanvasRenderingContext2D, meta: GameMeta, r: GameR
   g.restore(); g.strokeStyle = meta.color; g.lineWidth = 5 * S; g.beginPath(); g.roundRect(pad, top, artW, artH, 28 * S); g.stroke();
   // テキスト領域
   const tx = wide ? pad + artW + 36 * S : pad, tw = wide ? W - tx - pad : W - pad * 2; let ty = wide ? top + 40 * S : top + artH + 70 * S;
-  if (o.rareName) { g.fillStyle = '#ffd93d'; g.font = font(900, 34 * S); g.fillText(`✨ レア発見：${o.rareName}${o.rateText ? '  ' + o.rateText : ''}`.slice(0, 34), tx, ty); ty += 56 * S; }
+  if (o.rareName) { g.fillStyle = '#ffd93d'; g.font = font(900, 34 * S); g.fillText(`レア発見：${o.rareName}${o.rateText ? '  ' + o.rateText : ''}`.slice(0, 34), tx, ty); ty += 56 * S; }
   if (o.rank) { g.fillStyle = '#ff3d81'; g.font = font(900, 40 * S); g.textAlign = 'right'; g.fillText(`RANK ${o.rank}`, W - pad, top + artH + (wide ? -16 * S : 56 * S)); g.textAlign = 'left'; }
   g.fillStyle = '#9a93c4'; g.font = font(700, 30 * S); g.fillText('称号', tx, ty); ty += 62 * S;
   let fs = 66 * S; g.font = font(900, fs); while (g.measureText(art?.title ?? '').width > tw && fs > 30) { fs -= 3; g.font = font(900, fs); }

@@ -1,6 +1,8 @@
 // 開始画面: 命令文1つ＋操作を見せるループアニメ＋大きなSTART。説明文は置かない。
 import { drawUncle } from '../core/characters';
 import type { GameMeta } from '../core/types';
+import { pic, hasImg } from '../core/images';
+import { ICON } from './icons';
 
 import { demo as demo_egg } from '../games/egg/demo';
 import { demo as demo_toothpaste } from '../games/toothpaste/demo';
@@ -63,13 +65,14 @@ const DEMOS: Record<string, Demo> = {
 };
 
 export function renderStart(layer: HTMLElement, meta: GameMeta, o: { muted: boolean; challenge?: string; onStart: () => void }): () => void {
-  layer.innerHTML = `<div class="start" style="--c:${meta.color}">
+  layer.innerHTML = `<div class="start ${hasImg(meta.slug, 'key') ? 'haskey' : ''}" style="--c:${meta.color}">
+    ${hasImg(meta.slug, 'key') ? `<div class="keybg">${pic(meta.slug, 'key', 'keyimg', meta.title)}</div>` : ''}
     ${o.challenge ? `<div class="chip bp chal">${o.challenge}</div>` : ''}
     <div class="stitle">${meta.title}</div>
-    <canvas class="demo"></canvas>
+    <div class="demowrap"><canvas class="demo"></canvas>${hasImg(meta.slug, 'key') ? '' : '<span class="phtag">キービジュアル未生成</span>'}</div>
     <div class="cmd">${meta.command}</div>
     <button class="cta startbtn" id="start">START</button>
-    <div class="muted">${o.muted ? '🔇 ミュート中' : ''}</div></div>`;
+    <div class="muted">${o.muted ? ICON.mute + ' ミュート中' : ''}</div></div>`;
   const cv = layer.querySelector<HTMLCanvasElement>('.demo')!, g = cv.getContext('2d')!;
   const dpr = Math.min(2, devicePixelRatio || 1); let raf = 0, alive = true, t0 = performance.now();
   const size = () => { const r = cv.getBoundingClientRect(); cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr); };
