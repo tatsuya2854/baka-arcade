@@ -26,6 +26,8 @@ for (const id of Object.keys(play)) {
     // 保存データ
     const save = await page.evaluate(() => JSON.parse(localStorage.getItem('baka.save.v1')!));
     expect(save.plays[id]).toBe(1); expect(save.best[id]).toBeGreaterThanOrEqual(0);
+    await page.locator('summary').click(); // 他の共有方法を開く
+    await expect(page.locator('#sp')).toBeVisible(); await expect(page.locator('.rankb')).toBeVisible();
     // 画像保存
     await page.waitForTimeout(800);
     const [dl] = await Promise.all([page.waitForEvent('download'), page.locator('#si').click()]);
