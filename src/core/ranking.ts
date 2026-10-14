@@ -9,7 +9,7 @@ export async function beginSession(game: string): Promise<void> {
   session = null;
   try {
     const r = await fetch('/api/start', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ game }) });
-    if (r.ok) session = await r.json();
+    if (r.ok) session = (await r.json()) as Session;
   } catch { /* オフライン */ }
 }
 export async function submitScore(game: string, score: number, durationMs: number): Promise<{ ok: boolean; rank?: number; reason?: string }> {
@@ -19,9 +19,9 @@ export async function submitScore(game: string, score: number, durationMs: numbe
     const r = await fetch('/api/score', { method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ game, score, durationMs, nickname: s.nickname, uid: s.uid, ...session }) });
     session = null;
-    return await r.json();
+    return (await r.json()) as { ok: boolean; rank?: number; reason?: string };
   } catch { return { ok: false, reason: 'offline' }; }
 }
 export async function fetchRanking(game: string, period: Period): Promise<RankRow[] | null> {
-  try { const r = await fetch(`/api/ranking?game=${game}&period=${period}`); if (!r.ok) return null; return (await r.json()).rows; } catch { return null; }
+  try { const r = await fetch(`/api/ranking?game=${game}&period=${period}`); if (!r.ok) return null; return ((await r.json()) as { rows: RankRow[] }).rows; } catch { return null; }
 }
