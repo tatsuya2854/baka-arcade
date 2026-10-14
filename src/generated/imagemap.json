@@ -1,1 +1,622 @@
-{}
+{
+ "ojisan-stack": {
+  "key": {
+   "v": "e200d478",
+   "widths": [
+    540,
+    1080
+   ],
+   "w": 1024,
+   "h": 1536,
+   "alpha": false
+  },
+  "bg": {
+   "v": "b7e981ea",
+   "widths": [
+    540,
+    1080
+   ],
+   "w": 1024,
+   "h": 1536,
+   "alpha": false
+  },
+  "hero": {
+   "v": "82560046",
+   "widths": [
+    360,
+    720
+   ],
+   "w": 1024,
+   "h": 1024,
+   "alpha": true
+  },
+  "item": {
+   "v": "1194f5e8",
+   "widths": [
+    360,
+    720
+   ],
+   "w": 1024,
+   "h": 1024,
+   "alpha": true
+  },
+  "result_good": {
+   "v": "00ec57f9",
+   "widths": [
+    640,
+    1280
+   ],
+   "w": 1536,
+   "h": 1024,
+   "alpha": false
+  },
+  "result_bad": {
+   "v": "cf6a42aa",
+   "widths": [
+    640,
+    1280
+   ],
+   "w": 1536,
+   "h": 1024,
+   "alpha": false
+  }
+ },
+ "fart-elevator": {
+  "key": {
+   "v": "c582e264",
+   "widths": [
+    540,
+    1080
+   ],
+   "w": 1024,
+   "h": 1536,
+   "alpha": false
+  },
+  "bg": {
+   "v": "5476fe65",
+   "widths": [
+    540,
+    1080
+   ],
+   "w": 1024,
+   "h": 1536,
+   "alpha": false
+  },
+  "hero": {
+   "v": "c1aeaef8",
+   "widths": [
+    360,
+    720
+   ],
+   "w": 1024,
+   "h": 1024,
+   "alpha": true
+  },
+  "item": {
+   "v": "76ed618d",
+   "widths": [
+    360,
+    720
+   ],
+   "w": 1024,
+   "h": 1024,
+   "alpha": true
+  },
+  "result_good": {
+   "v": "5160eee6",
+   "widths": [
+    640,
+    1280
+   ],
+   "w": 1536,
+   "h": 1024,
+   "alpha": false
+  },
+  "result_bad": {
+   "v": "be4f2ea7",
+   "widths": [
+    640,
+    1280
+   ],
+   "w": 1536,
+   "h": 1024,
+   "alpha": false
+  }
+ },
+ "save-the-hair": {
+  "key": {
+   "v": "d229d7e0",
+   "widths": [
+    540,
+    1080
+   ],
+   "w": 1024,
+   "h": 1536,
+   "alpha": false
+  },
+  "bg": {
+   "v": "dd52c22b",
+   "widths": [
+    540,
+    1080
+   ],
+   "w": 1024,
+   "h": 1536,
+   "alpha": false
+  },
+  "hero": {
+   "v": "11227dbc",
+   "widths": [
+    360,
+    720
+   ],
+   "w": 1024,
+   "h": 1024,
+   "alpha": true
+  },
+  "item": {
+   "v": "a3bbe76b",
+   "widths": [
+    360,
+    720
+   ],
+   "w": 1024,
+   "h": 1024,
+   "alpha": true
+  },
+  "result_good": {
+   "v": "6e5900fc",
+   "widths": [
+    640,
+    1280
+   ],
+   "w": 1536,
+   "h": 1024,
+   "alpha": false
+  },
+  "result_bad": {
+   "v": "6dc28650",
+   "widths": [
+    640,
+    1280
+   ],
+   "w": 1536,
+   "h": 1024,
+   "alpha": false
+  }
+ },
+ "nosehair-pull": {
+  "key": {
+   "v": "1a035f21",
+   "widths": [
+    540,
+    1080
+   ],
+   "w": 1024,
+   "h": 1536,
+   "alpha": false
+  },
+  "bg": {
+   "v": "40b22df3",
+   "widths": [
+    540,
+    1080
+   ],
+   "w": 1024,
+   "h": 1536,
+   "alpha": false
+  },
+  "hero": {
+   "v": "ad622abf",
+   "widths": [
+    360,
+    720
+   ],
+   "w": 1024,
+   "h": 1024,
+   "alpha": true
+  },
+  "item": {
+   "v": "f87e4729",
+   "widths": [
+    360,
+    720
+   ],
+   "w": 1024,
+   "h": 1024,
+   "alpha": true
+  },
+  "result_good": {
+   "v": "eb7d9fc2",
+   "widths": [
+    640,
+    1280
+   ],
+   "w": 1536,
+   "h": 1024,
+   "alpha": false
+  },
+  "result_bad": {
+   "v": "f74d8439",
+   "widths": [
+    640,
+    1280
+   ],
+   "w": 1536,
+   "h": 1024,
+   "alpha": false
+  }
+ },
+ "dont-press": {
+  "key": {
+   "v": "c5f7e867",
+   "widths": [
+    540,
+    1080
+   ],
+   "w": 1024,
+   "h": 1536,
+   "alpha": false
+  },
+  "bg": {
+   "v": "ba263f3c",
+   "widths": [
+    540,
+    1080
+   ],
+   "w": 1024,
+   "h": 1536,
+   "alpha": false
+  },
+  "hero": {
+   "v": "b23f64b0",
+   "widths": [
+    360,
+    720
+   ],
+   "w": 1024,
+   "h": 1024,
+   "alpha": true
+  },
+  "item": {
+   "v": "43335d73",
+   "widths": [
+    360,
+    720
+   ],
+   "w": 1024,
+   "h": 1024,
+   "alpha": true
+  },
+  "result_good": {
+   "v": "59fdab36",
+   "widths": [
+    640,
+    1280
+   ],
+   "w": 1536,
+   "h": 1024,
+   "alpha": false
+  },
+  "result_bad": {
+   "v": "778ef8a6",
+   "widths": [
+    640,
+    1280
+   ],
+   "w": 1536,
+   "h": 1024,
+   "alpha": false
+  }
+ },
+ "egg-landing": {
+  "key": {
+   "v": "e7366f51",
+   "widths": [
+    540,
+    1080
+   ],
+   "w": 1024,
+   "h": 1536,
+   "alpha": false
+  },
+  "bg": {
+   "v": "540ef9d8",
+   "widths": [
+    540,
+    1080
+   ],
+   "w": 1024,
+   "h": 1536,
+   "alpha": false
+  },
+  "hero": {
+   "v": "3831ed11",
+   "widths": [
+    360,
+    720
+   ],
+   "w": 1024,
+   "h": 1024,
+   "alpha": true
+  },
+  "item": {
+   "v": "d57cb8ed",
+   "widths": [
+    360,
+    720
+   ],
+   "w": 1024,
+   "h": 1024,
+   "alpha": true
+  },
+  "result_good": {
+   "v": "03847b3f",
+   "widths": [
+    640,
+    1280
+   ],
+   "w": 1536,
+   "h": 1024,
+   "alpha": false
+  },
+  "result_bad": {
+   "v": "442c3f20",
+   "widths": [
+    640,
+    1280
+   ],
+   "w": 1536,
+   "h": 1024,
+   "alpha": false
+  }
+ },
+ "toothpaste-10cm": {
+  "key": {
+   "v": "4956e7f8",
+   "widths": [
+    540,
+    1080
+   ],
+   "w": 1024,
+   "h": 1536,
+   "alpha": false
+  },
+  "bg": {
+   "v": "390cf0d9",
+   "widths": [
+    540,
+    1080
+   ],
+   "w": 1024,
+   "h": 1536,
+   "alpha": false
+  },
+  "hero": {
+   "v": "258e35c9",
+   "widths": [
+    360,
+    720
+   ],
+   "w": 1024,
+   "h": 1024,
+   "alpha": true
+  },
+  "item": {
+   "v": "ace52566",
+   "widths": [
+    360,
+    720
+   ],
+   "w": 1024,
+   "h": 1024,
+   "alpha": true
+  },
+  "result_good": {
+   "v": "a4497cdb",
+   "widths": [
+    640,
+    1280
+   ],
+   "w": 1536,
+   "h": 1024,
+   "alpha": false
+  },
+  "result_bad": {
+   "v": "85a8d4bc",
+   "widths": [
+    640,
+    1280
+   ],
+   "w": 1536,
+   "h": 1024,
+   "alpha": false
+  }
+ },
+ "usb-insert": {
+  "key": {
+   "v": "dc378a0c",
+   "widths": [
+    540,
+    1080
+   ],
+   "w": 1024,
+   "h": 1536,
+   "alpha": false
+  },
+  "bg": {
+   "v": "4d4f5869",
+   "widths": [
+    540,
+    1080
+   ],
+   "w": 1024,
+   "h": 1536,
+   "alpha": false
+  },
+  "hero": {
+   "v": "78db128d",
+   "widths": [
+    360,
+    720
+   ],
+   "w": 1024,
+   "h": 1024,
+   "alpha": true
+  },
+  "item": {
+   "v": "ac795fb8",
+   "widths": [
+    360,
+    720
+   ],
+   "w": 1024,
+   "h": 1024,
+   "alpha": true
+  },
+  "result_good": {
+   "v": "dde8541c",
+   "widths": [
+    640,
+    1280
+   ],
+   "w": 1536,
+   "h": 1024,
+   "alpha": false
+  },
+  "result_bad": {
+   "v": "dd373816",
+   "widths": [
+    640,
+    1280
+   ],
+   "w": 1536,
+   "h": 1024,
+   "alpha": false
+  }
+ },
+ "ketchup-pour": {
+  "key": {
+   "v": "747354e1",
+   "widths": [
+    540,
+    1080
+   ],
+   "w": 1024,
+   "h": 1536,
+   "alpha": false
+  },
+  "bg": {
+   "v": "a492acaf",
+   "widths": [
+    540,
+    1080
+   ],
+   "w": 1024,
+   "h": 1536,
+   "alpha": false
+  },
+  "hero": {
+   "v": "02547653",
+   "widths": [
+    360,
+    720
+   ],
+   "w": 1024,
+   "h": 1024,
+   "alpha": true
+  },
+  "item": {
+   "v": "b0689ad4",
+   "widths": [
+    360,
+    720
+   ],
+   "w": 1024,
+   "h": 1024,
+   "alpha": true
+  },
+  "result_good": {
+   "v": "911476e5",
+   "widths": [
+    640,
+    1280
+   ],
+   "w": 1536,
+   "h": 1024,
+   "alpha": false
+  },
+  "result_bad": {
+   "v": "7fd07a2a",
+   "widths": [
+    640,
+    1280
+   ],
+   "w": 1536,
+   "h": 1024,
+   "alpha": false
+  }
+ },
+ "tissue-one": {
+  "key": {
+   "v": "82b0b31f",
+   "widths": [
+    540,
+    1080
+   ],
+   "w": 1024,
+   "h": 1536,
+   "alpha": false
+  },
+  "bg": {
+   "v": "0a635acc",
+   "widths": [
+    540,
+    1080
+   ],
+   "w": 1024,
+   "h": 1536,
+   "alpha": false
+  },
+  "hero": {
+   "v": "ba6dbe9c",
+   "widths": [
+    360,
+    720
+   ],
+   "w": 1024,
+   "h": 1024,
+   "alpha": true
+  },
+  "item": {
+   "v": "6022749c",
+   "widths": [
+    360,
+    720
+   ],
+   "w": 1024,
+   "h": 1024,
+   "alpha": true
+  },
+  "result_good": {
+   "v": "d18c2f2a",
+   "widths": [
+    640,
+    1280
+   ],
+   "w": 1536,
+   "h": 1024,
+   "alpha": false
+  },
+  "result_bad": {
+   "v": "c549e7a4",
+   "widths": [
+    640,
+    1280
+   ],
+   "w": 1536,
+   "h": 1024,
+   "alpha": false
+  }
+ }
+}

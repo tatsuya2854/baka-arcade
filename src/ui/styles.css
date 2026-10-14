@@ -165,3 +165,5 @@ h2::before{display:none}
 .bpbar i{background:var(--gold)}
 .pbar button{border-radius:99px;display:grid;place-items:center}
 .phtag{position:absolute;left:10px;top:8px;font-size:10px;letter-spacing:.14em;color:#6d6a64;pointer-events:none}
+.start.haskey .demowrap{display:none}
+.start.haskey{justify-content:flex-end}

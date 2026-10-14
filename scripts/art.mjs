@@ -106,5 +106,9 @@ function clean() { // art/ 内の「どの枠にも対応しない」ファイ�
   console.log(n ? `${n} 件の未使用ファイル（手動で整理してください）` : '未使用ファイルなし');
 }
 
+export { C, kindOf, srcFile, fullPrompt, ART };
+if (process.argv[1] === import.meta.filename) {
 const cmd = process.argv[2] ?? 'status';
 if (cmd === 'sync') sync(); else if (cmd === 'status') { sync(); status(); } else if (cmd === 'prompts') { sync(); prompts(); } else if (cmd === 'build') { sync(); await build(); } else if (cmd === 'clean') clean(); else console.log('usage: status | prompts | sync | build | clean');
+
+}

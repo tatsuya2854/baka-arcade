@@ -5,3 +5,7 @@ dist
 test-results
 playwright-report
 .DS_Store
+# 生成した原画（大きいので git に入れない。出力は public/img と src/generated/imagemap.json）
+art/*/*.png
+art/*/*.jpg
+art/*/*.webp

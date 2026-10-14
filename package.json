@@ -14,7 +14,8 @@
     "art": "node scripts/art.mjs status",
     "art:prompts": "node scripts/art.mjs prompts",
     "art:build": "node scripts/art.mjs build && node scripts/gen-og.mjs",
-    "art:clean": "node scripts/art.mjs clean"
+    "art:clean": "node scripts/art.mjs clean",
+    "art:gen": "node scripts/art-gen.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261014.1",
