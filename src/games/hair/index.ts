@@ -1,6 +1,7 @@
 import type { GameModule, GameContext, GameInstance, ResultArt } from '../../core/types';
 import { drawUncle, drawBubble, type Expr } from '../../core/characters';
 import { meta } from './meta';
+import { loadImg, drawCover } from '../../core/images';
 import { CFG } from './config';
 import { Hair3D, type HairFrame } from './hair3d';
 
@@ -62,14 +63,61 @@ function start(ctx: GameContext): GameInstance {
     root.append(bgCv, st3.canvas, cv); use3d = true;
   } catch { try { st3?.dispose(); } catch { /* ignore */ } st3 = null; bgCv = null; gBg = null; use3d = false; root.appendChild(cv); }
   let W = 390, H = 844, dpr = 1;
+  // ---- 生成画像（bg=暗いスタジオ / hero=実写の頭部）。無ければ従来の3D/2D描画にフォールバック ----
+  const SLUG = 'save-the-hair';
+  let imgBg: HTMLImageElement | null = null, imgHero: HTMLImageElement | null = null;
+  let bgOff: HTMLCanvasElement | null = null, heroOff: HTMLCanvasElement | null = null, heroS = 0, destroyedFlag = false;
+  // 写真上の髪の根元(頭頂の見える部分)と画像サイズ。resize毎に作り直す。
+  const ROOT_FX = 0.60, ROOT_FY = 0.13;
+  const heroSize = () => Math.min(W * 1.3, H * 0.6);
+  const buildOff = () => {
+    if (imgBg) {
+      const c = bgOff ?? (bgOff = document.createElement('canvas')); c.width = Math.round(W * dpr); c.height = Math.round(H * dpr);
+      const q = c.getContext('2d')!; q.setTransform(dpr, 0, 0, dpr, 0, 0); drawCover(q, imgBg, W, H, 0.5, 0.5);
+      const vg = q.createLinearGradient(0, 0, 0, H); vg.addColorStop(0, 'rgba(0,0,0,.25)'); vg.addColorStop(0.5, 'rgba(0,0,0,.05)'); vg.addColorStop(1, 'rgba(0,0,0,.3)'); q.fillStyle = vg; q.fillRect(0, 0, W, H);
+    }
+    if (imgHero) {
+      const S = heroSize(); heroS = S;
+      const c = heroOff ?? (heroOff = document.createElement('canvas')); c.width = Math.round(S * dpr); c.height = Math.round(S * dpr);
+      const q = c.getContext('2d')!; q.setTransform(1, 0, 0, 1, 0, 0); q.clearRect(0, 0, c.width, c.height); q.globalCompositeOperation = 'source-over';
+      // 切り抜き(alpha)が白シャツ部分で抜けているので、胴体の内側だけ元画像(白地合成)で裏打ちして穴を埋める。外形は元のalphaのまま。
+      const k = c.width / 720;
+      const poly = (pts: number[][]) => { q.beginPath(); pts.forEach(([x, y], i) => i ? q.lineTo(x * k, y * k) : q.moveTo(x * k, y * k)); q.closePath(); };
+      const solid = document.createElement('canvas'); solid.width = c.width; solid.height = c.height;
+      const sq = solid.getContext('2d')!; sq.fillStyle = '#fff'; sq.fillRect(0, 0, c.width, c.height); sq.drawImage(imgHero, 0, 0, c.width, c.height);
+      q.save();
+      poly([[0, 335], [75, 268], [125, 250], [195, 305], [130, 405], [150, 412], [150, 720], [0, 720]]); q.clip(); q.drawImage(solid, 0, 0); q.restore();
+      q.save();
+      poly([[150, 412], [240, 402], [300, 392], [345, 425], [420, 470], [515, 372], [585, 440], [720, 505], [720, 720], [150, 720]]); q.clip(); q.drawImage(solid, 0, 0); q.restore();
+      q.drawImage(imgHero, 0, 0, c.width, c.height);
+      // 腕と首の間に残った白い背景(不透明)を抜く
+      q.globalCompositeOperation = 'destination-out'; poly([[192, 300], [238, 268], [262, 296], [276, 345], [296, 380], [312, 396], [240, 402], [150, 412], [130, 402], [160, 350]]); q.fill();
+      q.globalCompositeOperation = 'source-over';
+      // 暗いスタジオの光になじませる: 全体を冷たく落とし、右(逆光側)に青白いリム、左は暗く
+      q.globalCompositeOperation = 'source-atop';
+      q.fillStyle = 'rgba(30,42,70,.42)'; q.fillRect(0, 0, c.width, c.height);
+      const rg = q.createLinearGradient(c.width * 0.55, 0, c.width, 0); rg.addColorStop(0, 'rgba(150,185,255,0)'); rg.addColorStop(1, 'rgba(150,185,255,.28)'); q.fillStyle = rg; q.fillRect(0, 0, c.width, c.height);
+      const lg = q.createLinearGradient(0, 0, c.width * 0.45, 0); lg.addColorStop(0, 'rgba(0,0,0,.25)'); lg.addColorStop(1, 'rgba(0,0,0,0)'); q.fillStyle = lg; q.fillRect(0, 0, c.width, c.height);
+      // 下端は闇に溶かす（画像の切れ目を見せない）
+      q.globalCompositeOperation = 'destination-out';
+      const bg2 = q.createLinearGradient(0, c.height * 0.72, 0, c.height); bg2.addColorStop(0, 'rgba(0,0,0,0)'); bg2.addColorStop(1, 'rgba(0,0,0,1)'); q.fillStyle = bg2; q.fillRect(0, 0, c.width, c.height);
+      q.globalCompositeOperation = 'source-over';
+    }
+  };
   const resize = () => {
     dpr = Math.min(window.devicePixelRatio || 1, 2);
     W = root.clientWidth || window.innerWidth; H = root.clientHeight || window.innerHeight;
     cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
     if (bgCv) { bgCv.width = cv.width; bgCv.height = cv.height; }
     st3?.resize(W, H, dpr);
+    buildOff();
   };
   resize();
+  Promise.all([loadImg(SLUG, 'bg'), loadImg(SLUG, 'hero')]).then(([b, h]) => {
+    if (destroyedFlag) return;
+    imgBg = b; imgHero = use3d ? h : null; // 実写頭部は3D(髪のみ3D)モードでだけ使う。2Dフォールバックは従来のおじさん
+    buildOff(); st3?.setPhoto(!!imgHero);
+  });
   window.addEventListener('resize', resize);
 
   // ---- 状態 ----
@@ -99,6 +147,7 @@ function start(ctx: GameContext): GameInstance {
   const L = () => {
     const h = Math.min(W * 1.2, H * 0.58), hr = 0.19 * h;
     const hcy = H * 0.5, cx = W / 2;
+    if (heroOff) { const S = heroS, rx = cx + (ROOT_FX - 0.52) * S, ry = H * 0.34; return { h, hr, hcy, cx, rx, ry, uy: hcy + 0.31 * h }; }
     return { h, hr, hcy, cx, rx: cx, ry: hcy - hr * 0.95, uy: hcy + 0.31 * h };
   };
   const segLen = () => L().hr * 0.11;
@@ -159,7 +208,7 @@ function start(ctx: GameContext): GameInstance {
   function spawnLeaf(w: number) {
     const dir = w >= 0 ? 1 : -1, trash = Math.random() < 0.3;
     addP({ k: trash ? 'trash' : 'leaf', x: dir > 0 ? -20 : W + 20, y: Math.random() * H * 0.85, vx: dir * (120 + Math.random() * 200), vy: (Math.random() - 0.5) * 60,
-      life: 6, max: 6, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 8, size: 8 + Math.random() * 8, c: trash ? ['#ddd', '#9bd', '#fc8'][Math.floor(Math.random() * 3)] : ['#6c3', '#9c3', '#d83'][Math.floor(Math.random() * 3)] });
+      life: 6, max: 6, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 8, size: 8 + Math.random() * 8, c: bgOff ? ['#8a8f99', '#a9a49a', '#6f747d'][Math.floor(Math.random() * 3)] : trash ? ['#ddd', '#9bd', '#fc8'][Math.floor(Math.random() * 3)] : ['#6c3', '#9c3', '#d83'][Math.floor(Math.random() * 3)] });
   }
   function spawnLine(w: number) {
     const dir = w >= 0 ? 1 : -1;
@@ -291,12 +340,15 @@ function start(ctx: GameContext): GameInstance {
 
   // ---- 描画 ----
   function drawBg() {
-    const gr = g.createLinearGradient(0, 0, 0, H);
-    gr.addColorStop(0, '#173a63'); gr.addColorStop(1, '#2e6f9e');
-    g.fillStyle = gr; g.fillRect(0, 0, W, H);
+    if (bgOff) { g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(bgOff, 0, 0); g.restore(); }
+    else {
+      const gr = g.createLinearGradient(0, 0, 0, H);
+      gr.addColorStop(0, '#173a63'); gr.addColorStop(1, '#2e6f9e');
+      g.fillStyle = gr; g.fillRect(0, 0, W, H);
+    }
     // 雲
     g.fillStyle = 'rgba(255,255,255,.07)';
-    for (let i = 0; i < 4; i++) { const x = ((real * (20 + i * 10) * (wind >= 0 ? 1 : -1) + i * 160) % (W + 200) + W + 200) % (W + 200) - 100; g.beginPath(); g.ellipse(x, 90 + i * 70, 90, 22, 0, 0, 7); g.fill(); }
+    if (!bgOff) for (let i = 0; i < 4; i++) { const x = ((real * (20 + i * 10) * (wind >= 0 ? 1 : -1) + i * 160) % (W + 200) + W + 200) % (W + 200) - 100; g.beginPath(); g.ellipse(x, 90 + i * 70, 90, 22, 0, 0, 7); g.fill(); }
     // 警告の縁
     const pw = phase === 'play' ? windAt(t + CFG.gustWarn) : 0;
     if (phase === 'play' && Math.abs(pw) > 0.35 && Math.abs(wind) < Math.abs(pw)) {
@@ -390,6 +442,23 @@ function start(ctx: GameContext): GameInstance {
     const px = l.rx + lastDir * l.hr * 0.4 + (Math.random() - 0.5) * shk, py = l.ry - l.hr * 0.12 + (Math.random() - 0.5) * shk;
     return { x: lerp(restX, px, handT), y: lerp(restY, py, handT) };
   }
+  /** 実写の頭部。3D側(髪)と同じズーム/揺れ変換を掛け、頭頂(髪の根元)を支点に風で傾ける。 */
+  function drawPhoto(l: ReturnType<typeof L>, sx: number, sy: number) {
+    if (!heroOff) return;
+    const S = heroS, pain = clamp(dmg), over = phase === 'over' ? clamp(overT / 0.5) : 0;
+    g.save();
+    g.translate(sx, sy); g.translate(l.cx, l.hcy - l.hr * 0.3); g.scale(zoom, zoom); g.translate(-l.cx, -(l.hcy - l.hr * 0.3));
+    g.translate(l.rx, l.ry + handT * 3);
+    g.rotate(wind * 0.05 - pain * 0.02 + over * (0.08 + Math.sin(real * 9) * 0.02) + (fatigue * fatigue) * Math.sin(real * 40) * 0.004);
+    g.drawImage(heroOff, -ROOT_FX * S, -ROOT_FY * S, S, S);
+    // 頭皮の痛み/引っ張られの赤み（根元まわり）
+    const red = clamp(Math.max(stress * 0.6, dmg));
+    if (red > 0.05) {
+      const rg = g.createRadialGradient(0, 8, 2, 0, 8, S * 0.11); rg.addColorStop(0, `rgba(255,70,60,${red * 0.5})`); rg.addColorStop(1, 'rgba(255,70,60,0)');
+      g.fillStyle = rg; g.fillRect(-S * 0.12, -S * 0.08, S * 0.24, S * 0.24);
+    }
+    g.restore();
+  }
   function render3d(l: ReturnType<typeof L>, sx: number, sy: number) {
     const hp = handPose(l);
     fr.W = W; fr.H = H; fr.cx = l.cx; fr.uy = l.uy; fr.h = l.h; fr.rx = l.rx; fr.ry = l.ry; fr.hr = l.hr;
@@ -408,6 +477,7 @@ function start(ctx: GameContext): GameInstance {
     const sx = (Math.random() - 0.5) * shake * 2, sy = (Math.random() - 0.5) * shake * 2;
     if (use3d && st3 && gBg) {
       g = gBg; g.setTransform(dpr, 0, 0, dpr, 0, 0); drawBg();
+      drawPhoto(l, sx, sy);
       render3d(l, sx, sy);
       g = gTop; g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height);
     }
@@ -529,7 +599,7 @@ function start(ctx: GameContext): GameInstance {
       window.removeEventListener('resize', resize); window.removeEventListener('keydown', kd); window.removeEventListener('keyup', ku);
       cv.removeEventListener('pointerdown', pd); cv.removeEventListener('pointerup', pu); cv.removeEventListener('pointercancel', pu);
       cv.removeEventListener('contextmenu', noCtx);
-      cv.remove(); bgCv?.remove(); parts.length = 0;
+      cv.remove(); bgCv?.remove(); parts.length = 0; destroyedFlag = true; bgOff = null; heroOff = null; imgBg = null; imgHero = null;
       if (st3) { st3.dispose(); st3 = null; } use3d = false;
       delete (window as unknown as Record<string, unknown>).__hair;
     },

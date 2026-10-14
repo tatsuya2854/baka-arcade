@@ -1,4 +1,26 @@
 import { fmtCm, fmtErr, verdictOf } from './config';
+import { loadImg } from '../../core/images';
+
+const SLUG = 'toothpaste-10cm';
+/** 生成画像(読めなければ null=旧描画にフォールバック)。モジュール共有 */
+export const TI: { bg: HTMLImageElement | null; hero: HTMLImageElement | null } = { bg: null, hero: null };
+let tiP: Promise<void> | null = null;
+export const loadToothpasteImgs = (): Promise<void> => (tiP ??= Promise.all([loadImg(SLUG, 'bg'), loadImg(SLUG, 'hero')]).then(([b, h]) => { TI.bg = b; TI.hero = h; }));
+// 背景は静的なのでオフスクリーンに1回だけ描いて使い回す
+let bgCv: HTMLCanvasElement | null = null;
+export const releaseBg = () => { bgCv = null; };
+function bgCanvas(w: number, h: number): HTMLCanvasElement {
+  if (bgCv && bgCv.width === w && bgCv.height === h) return bgCv;
+  const c = bgCv && bgCv.width === w && bgCv.height === h ? bgCv : document.createElement('canvas'); c.width = w; c.height = h;
+  const g = c.getContext('2d')!, b = TI.bg!;
+  // 左端の鋼の定規(縦)は使わず大理石の部分だけ切り出す(定規はゲーム側で水平に描く)
+  const sx = b.width * 0.08, sw = b.width - sx, sc = Math.max(w / sw, h / b.height), dw = sw * sc, dh = b.height * sc;
+  g.drawImage(b, sx, 0, sw, b.height, (w - dw) * 0.5, (h - dh) * 0.5, dw, dh);
+  const v = g.createRadialGradient(w / 2, h * 0.45, Math.min(w, h) * 0.3, w / 2, h * 0.5, Math.max(w, h) * 0.8);
+  v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(30,45,60,0.16)');
+  g.fillStyle = v; g.fillRect(0, 0, w, h);
+  bgCv = c; return c;
+}
 
 // 仮想キャンバス 390x620 に描いて contain で拡縮する
 export const VW = 390, VH = 620;
@@ -27,6 +49,7 @@ export function rr(g: CanvasRenderingContext2D, x: number, y: number, w: number,
 
 // ---- 背景（洗面台） ----
 function drawBg(g: CanvasRenderingContext2D, w: number, h: number, ox: number, oy: number, S: number) {
+  if (TI.bg) { g.drawImage(bgCanvas(w, h), 0, 0); return; }
   const hy = oy + 150 * S;
   let gr = g.createLinearGradient(0, 0, 0, hy);
   gr.addColorStop(0, '#cfdbe2'); gr.addColorStop(1, '#e8eef1');
@@ -71,6 +94,11 @@ function drawCap(g: CanvasRenderingContext2D) {
   e.addColorStop(0, '#ffffff'); e.addColorStop(1, '#c4cfd8');
   g.fillStyle = e; g.beginPath(); g.ellipse(-26, 0, 5, 13, 0, 0, Math.PI * 2); g.fill();
   g.strokeStyle = 'rgba(255,255,255,0.8)'; g.lineWidth = 2; g.beginPath(); g.moveTo(-18, -9); g.lineTo(20, -9); g.stroke();
+  if (TI.hero) { // チューブの赤白ストライプのキャップに合わせる
+    g.save(); rr(g, -26, -14, 52, 28, 7); g.clip(); g.fillStyle = 'rgba(214,32,38,0.92)';
+    for (let i = -28; i < 28; i += 8) g.fillRect(i, -14, 4, 28);
+    g.restore();
+  }
   g.restore();
 }
 
@@ -112,7 +140,8 @@ function drawRuler(g: CanvasRenderingContext2D) {
   const x0 = X0 - 18, x1 = 376, y0 = YR, hh = 46;
   for (let i = 0; i < 3; i++) { g.fillStyle = 'rgba(40,55,70,0.07)'; rr(g, x0 - i, y0 + 5 + i * 2, x1 - x0 + i * 2, hh + i, 5); g.fill(); }
   const gr = g.createLinearGradient(0, y0, 0, y0 + hh);
-  gr.addColorStop(0, '#f1dfb8'); gr.addColorStop(0.5, '#e2c88f'); gr.addColorStop(1, '#cfae6f');
+  if (TI.bg) { gr.addColorStop(0, '#eef1f3'); gr.addColorStop(0.5, '#cdd3d8'); gr.addColorStop(1, '#a9b1b8'); }
+  else { gr.addColorStop(0, '#f1dfb8'); gr.addColorStop(0.5, '#e2c88f'); gr.addColorStop(1, '#cfae6f'); }
   g.fillStyle = gr; rr(g, x0, y0, x1 - x0, hh, 5); g.fill();
   g.strokeStyle = 'rgba(120,85,30,0.12)'; g.lineWidth = 1; g.beginPath();
   for (let i = 0; i < 7; i++) { const y = y0 + 8 + i * 6; g.moveTo(x0 + 4, y); g.bezierCurveTo(x0 + 110, y - 1.5, x0 + 240, y + 2, x1 - 4, y - 0.5); }
@@ -207,64 +236,80 @@ function drawTube(g: CanvasRenderingContext2D, s: Scene, t: number) {
     g.lineTo(hw(y0), y0); g.closePath();
   };
   // 空中の落ち影
-  g.save(); g.translate(16, 20); g.fillStyle = 'rgba(30,45,60,0.07)';
-  bodyPath(); g.fill(); g.translate(-6, -7); bodyPath(); g.fill(); g.restore();
-  // 口
-  let gr = g.createLinearGradient(-7, 0, 7, 0);
-  gr.addColorStop(0, '#c4ced8'); gr.addColorStop(0.35, '#ffffff'); gr.addColorStop(1, '#a3b0bd');
-  g.fillStyle = gr; g.beginPath(); g.moveTo(-4.2, 0); g.lineTo(4.2, 0); g.lineTo(6.8, -15); g.lineTo(-6.8, -15); g.closePath(); g.fill();
-  g.strokeStyle = 'rgba(70,90,110,0.35)'; g.lineWidth = 1; g.beginPath(); g.moveTo(-5.6, -7); g.lineTo(5.6, -7); g.moveTo(-6.2, -11); g.lineTo(6.2, -11); g.stroke();
-  g.fillStyle = s.flow > 0.02 ? '#e03a3e' : '#8a98a6'; g.beginPath(); g.ellipse(0, -0.5, 3, 1.4, 0, 0, Math.PI * 2); g.fill();
-  // 肩（硬いプラ）
-  gr = g.createLinearGradient(-BW / 2, 0, BW / 2, 0);
-  gr.addColorStop(0, '#aab6c2'); gr.addColorStop(0.3, '#f2f6f9'); gr.addColorStop(0.55, '#ffffff'); gr.addColorStop(1, '#98a6b4');
-  g.fillStyle = gr; g.beginPath(); g.moveTo(-6.8, -14);
-  for (let i = 0; i <= 8; i++) { const u = i / 8, yy = -14 - 20 * u; g.lineTo(-(6.8 + (hw(y0) - 6.8) * Math.sin(u * Math.PI / 2)), yy); }
-  for (let i = 8; i >= 0; i--) { const u = i / 8, yy = -14 - 20 * u; g.lineTo(6.8 + (hw(y0) - 6.8) * Math.sin(u * Math.PI / 2), yy); }
-  g.closePath(); g.fill();
-  // 本体
-  g.save(); bodyPath(); g.clip();
-  gr = g.createLinearGradient(-BW / 2, 0, BW / 2, 0);
-  gr.addColorStop(0, '#b9c5d0'); gr.addColorStop(0.2, '#f6f9fb'); gr.addColorStop(0.5, '#ffffff'); gr.addColorStop(0.85, '#e0e7ed'); gr.addColorStop(1, '#a5b2bf');
-  g.fillStyle = gr; g.fillRect(-BW / 2 - 2, y1 - 2, BW + 4, Lb + 6);
-  // 印刷
-  g.fillStyle = '#e03a3e'; g.fillRect(-BW / 2 - 2, y0 - 10, BW + 4, 5);
-  g.fillStyle = '#2459c9'; g.fillRect(-BW / 2 - 2, y0 - 16, BW + 4, 6);
-  g.fillStyle = '#2f6fe0'; g.fillRect(-BW / 2 - 2, y0 - 62, BW + 4, 46);
-  g.fillStyle = 'rgba(255,255,255,0.9)'; g.font = `900 13px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.save(); g.translate(0, y0 - 39); g.fillText('FRESH', 0, -7); g.font = `700 9px ${FONT}`; g.fillText('MINT  100g', 0, 7); g.restore();
-  g.save(); g.translate(2, y0 - 62 - (Lb - 62) * 0.5 - 6); g.rotate(-Math.PI / 2);
-  g.fillStyle = '#2459c9'; g.font = `900 22px ${FONT}`; g.fillText('MINT', 0, 0); g.restore();
-  g.fillStyle = '#e03a3e'; g.beginPath(); g.arc(0, y1 + 22, 5, 0, Math.PI * 2); g.fill();
-  // 円筒の陰影
-  gr = g.createLinearGradient(-BW / 2, 0, BW / 2, 0);
-  gr.addColorStop(0, 'rgba(10,25,50,0.38)'); gr.addColorStop(0.18, 'rgba(10,25,50,0)'); gr.addColorStop(0.62, 'rgba(255,255,255,0)'); gr.addColorStop(1, 'rgba(10,25,50,0.36)');
-  g.fillStyle = gr; g.fillRect(-BW / 2 - 2, y1 - 2, BW + 4, Lb + 6);
-  g.fillStyle = 'rgba(255,255,255,0.5)'; g.fillRect(-BW * 0.24, y1, 4, Lb);
-  // しわ
-  const wk = 12;
-  for (let k = 0; k < wk; k++) {
-    const y = y0 - 8 - k * (Lb - 14) / wk, b = bell(y);
-    const a = 0.06 + 0.3 * s.used * ((k * 7) % 5) / 4 + 0.5 * sq * b;
-    const hh = hw(y);
-    g.strokeStyle = `rgba(30,45,70,${a})`; g.lineWidth = 1.2;
-    g.beginPath(); g.moveTo(-hh, y + ((k * 3) % 4)); g.quadraticCurveTo(0, y + 2 + 5 * sq * b, hh, y - 3 + ((k * 5) % 3)); g.stroke();
-    g.strokeStyle = `rgba(255,255,255,${a * 1.3})`;
-    g.beginPath(); g.moveTo(-hh, y + 1.6 + ((k * 3) % 4)); g.quadraticCurveTo(0, y + 3.6 + 5 * sq * b, hh, y - 1.4 + ((k * 5) % 3)); g.stroke();
+  if (TI.hero) { // 画像のチューブには四角い影を付けず、浮いている柔らかい影だけ
+    g.fillStyle = 'rgba(30,45,60,0.07)'; g.beginPath(); g.ellipse(12, y0 - Lb * 0.45 + 18, 30, Lb * 0.5, 0, 0, Math.PI * 2); g.fill();
+  } else {
+    g.save(); g.translate(16, 20); g.fillStyle = 'rgba(30,45,60,0.07)';
+    bodyPath(); g.fill(); g.translate(-6, -7); bodyPath(); g.fill(); g.restore();
   }
-  if (sq > 0.05) {
-    g.strokeStyle = `rgba(30,45,70,${sq * 0.38})`; g.lineWidth = 1.1; g.beginPath();
-    for (let k = 0; k < 5; k++) { const y = mid + (k - 2) * 15; g.moveTo(-hw(y), y - 4); g.lineTo(-hw(y) * 0.2, y + 6 + k); g.moveTo(hw(y), y + 2); g.lineTo(hw(y) * 0.25, y - 7 + k); }
+  const him = TI.hero;
+  if (him) {
+    const k = him.width / 1254, sx = 455 * k, sy = 55 * k, sw = 350 * k, sh = 1140 * k;
+    const H = 34 + Lb + 15, n = 20;
+    g.save(); g.rotate(Math.PI); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+    for (let i = 0; i < n; i++) {
+      const f0 = i / n, pw = hw(-(f0 + 0.5 / n) * H) * 2 * 0.95 * 1.12;
+      g.drawImage(him, sx, sy + f0 * sh, sw, sh / n + 0.6, -pw / 2, f0 * H, pw, H / n + 1);
+    }
+    g.restore();
+  } else {
+    // 口
+    let gr = g.createLinearGradient(-7, 0, 7, 0);
+    gr.addColorStop(0, '#c4ced8'); gr.addColorStop(0.35, '#ffffff'); gr.addColorStop(1, '#a3b0bd');
+    g.fillStyle = gr; g.beginPath(); g.moveTo(-4.2, 0); g.lineTo(4.2, 0); g.lineTo(6.8, -15); g.lineTo(-6.8, -15); g.closePath(); g.fill();
+    g.strokeStyle = 'rgba(70,90,110,0.35)'; g.lineWidth = 1; g.beginPath(); g.moveTo(-5.6, -7); g.lineTo(5.6, -7); g.moveTo(-6.2, -11); g.lineTo(6.2, -11); g.stroke();
+    g.fillStyle = s.flow > 0.02 ? '#e03a3e' : '#8a98a6'; g.beginPath(); g.ellipse(0, -0.5, 3, 1.4, 0, 0, Math.PI * 2); g.fill();
+    // 肩（硬いプラ）
+    gr = g.createLinearGradient(-BW / 2, 0, BW / 2, 0);
+    gr.addColorStop(0, '#aab6c2'); gr.addColorStop(0.3, '#f2f6f9'); gr.addColorStop(0.55, '#ffffff'); gr.addColorStop(1, '#98a6b4');
+    g.fillStyle = gr; g.beginPath(); g.moveTo(-6.8, -14);
+    for (let i = 0; i <= 8; i++) { const u = i / 8, yy = -14 - 20 * u; g.lineTo(-(6.8 + (hw(y0) - 6.8) * Math.sin(u * Math.PI / 2)), yy); }
+    for (let i = 8; i >= 0; i--) { const u = i / 8, yy = -14 - 20 * u; g.lineTo(6.8 + (hw(y0) - 6.8) * Math.sin(u * Math.PI / 2), yy); }
+    g.closePath(); g.fill();
+    // 本体
+    g.save(); bodyPath(); g.clip();
+    gr = g.createLinearGradient(-BW / 2, 0, BW / 2, 0);
+    gr.addColorStop(0, '#b9c5d0'); gr.addColorStop(0.2, '#f6f9fb'); gr.addColorStop(0.5, '#ffffff'); gr.addColorStop(0.85, '#e0e7ed'); gr.addColorStop(1, '#a5b2bf');
+    g.fillStyle = gr; g.fillRect(-BW / 2 - 2, y1 - 2, BW + 4, Lb + 6);
+    // 印刷
+    g.fillStyle = '#e03a3e'; g.fillRect(-BW / 2 - 2, y0 - 10, BW + 4, 5);
+    g.fillStyle = '#2459c9'; g.fillRect(-BW / 2 - 2, y0 - 16, BW + 4, 6);
+    g.fillStyle = '#2f6fe0'; g.fillRect(-BW / 2 - 2, y0 - 62, BW + 4, 46);
+    g.fillStyle = 'rgba(255,255,255,0.9)'; g.font = `900 13px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.save(); g.translate(0, y0 - 39); g.fillText('FRESH', 0, -7); g.font = `700 9px ${FONT}`; g.fillText('MINT  100g', 0, 7); g.restore();
+    g.save(); g.translate(2, y0 - 62 - (Lb - 62) * 0.5 - 6); g.rotate(-Math.PI / 2);
+    g.fillStyle = '#2459c9'; g.font = `900 22px ${FONT}`; g.fillText('MINT', 0, 0); g.restore();
+    g.fillStyle = '#e03a3e'; g.beginPath(); g.arc(0, y1 + 22, 5, 0, Math.PI * 2); g.fill();
+    // 円筒の陰影
+    gr = g.createLinearGradient(-BW / 2, 0, BW / 2, 0);
+    gr.addColorStop(0, 'rgba(10,25,50,0.38)'); gr.addColorStop(0.18, 'rgba(10,25,50,0)'); gr.addColorStop(0.62, 'rgba(255,255,255,0)'); gr.addColorStop(1, 'rgba(10,25,50,0.36)');
+    g.fillStyle = gr; g.fillRect(-BW / 2 - 2, y1 - 2, BW + 4, Lb + 6);
+    g.fillStyle = 'rgba(255,255,255,0.5)'; g.fillRect(-BW * 0.24, y1, 4, Lb);
+    // しわ
+    const wk = 12;
+    for (let k = 0; k < wk; k++) {
+      const y = y0 - 8 - k * (Lb - 14) / wk, b = bell(y);
+      const a = 0.06 + 0.3 * s.used * ((k * 7) % 5) / 4 + 0.5 * sq * b;
+      const hh = hw(y);
+      g.strokeStyle = `rgba(30,45,70,${a})`; g.lineWidth = 1.2;
+      g.beginPath(); g.moveTo(-hh, y + ((k * 3) % 4)); g.quadraticCurveTo(0, y + 2 + 5 * sq * b, hh, y - 3 + ((k * 5) % 3)); g.stroke();
+      g.strokeStyle = `rgba(255,255,255,${a * 1.3})`;
+      g.beginPath(); g.moveTo(-hh, y + 1.6 + ((k * 3) % 4)); g.quadraticCurveTo(0, y + 3.6 + 5 * sq * b, hh, y - 1.4 + ((k * 5) % 3)); g.stroke();
+    }
+    if (sq > 0.05) {
+      g.strokeStyle = `rgba(30,45,70,${sq * 0.38})`; g.lineWidth = 1.1; g.beginPath();
+      for (let k = 0; k < 5; k++) { const y = mid + (k - 2) * 15; g.moveTo(-hw(y), y - 4); g.lineTo(-hw(y) * 0.2, y + 6 + k); g.moveTo(hw(y), y + 2); g.lineTo(hw(y) * 0.25, y - 7 + k); }
+      g.stroke();
+    }
+    g.restore();
+    // 圧着部
+    gr = g.createLinearGradient(-BW / 2, 0, BW / 2, 0);
+    gr.addColorStop(0, '#9fadba'); gr.addColorStop(0.3, '#e9eef2'); gr.addColorStop(1, '#8e9dab');
+    g.fillStyle = gr; g.fillRect(-hw(y1), y1 - 15, hw(y1) * 2, 15);
+    g.strokeStyle = 'rgba(40,55,75,0.4)'; g.lineWidth = 1; g.beginPath();
+    for (let y = y1 - 13; y < y1 - 1; y += 2.6) { g.moveTo(-hw(y1), y); g.lineTo(hw(y1), y); }
     g.stroke();
   }
-  g.restore();
-  // 圧着部
-  gr = g.createLinearGradient(-BW / 2, 0, BW / 2, 0);
-  gr.addColorStop(0, '#9fadba'); gr.addColorStop(0.3, '#e9eef2'); gr.addColorStop(1, '#8e9dab');
-  g.fillStyle = gr; g.fillRect(-hw(y1), y1 - 15, hw(y1) * 2, 15);
-  g.strokeStyle = 'rgba(40,55,75,0.4)'; g.lineWidth = 1; g.beginPath();
-  for (let y = y1 - 13; y < y1 - 1; y += 2.6) { g.moveTo(-hw(y1), y); g.lineTo(hw(y1), y); }
-  g.stroke();
   // 指
   const tipY = mid, fy = [tipY, tipY + 16];
   for (let k = 0; k < 2; k++) {

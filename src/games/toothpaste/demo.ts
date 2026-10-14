@@ -1,11 +1,12 @@
 // 開始画面のループ: チューブを長押し→歯磨き粉が伸びる→離す
 import { STAGES } from './config';
-import { drawScene, newScene } from './draw';
+import { drawScene, newScene, loadToothpasteImgs } from './draw';
 import { newSim, step } from './sim';
 
 const CYCLE = 4.6, PRESS0 = 0.5, PRESS1 = 2.0;
 const sc = newScene();
 export const demo = (g: CanvasRenderingContext2D, w: number, h: number, t: number) => {
+  void loadToothpasteImgs();
   const c = STAGES[0], s = newSim(), tt = t % CYCLE, dt = 1 / 60;
   for (let x = 0; x < tt; x += dt) step(s, c, x >= PRESS0 && x < PRESS1, dt);
   sc.L = s.L; sc.grip = s.g; sc.flow = s.flow; sc.amp = s.amp; sc.target = c.target; sc.spat = s.spat;

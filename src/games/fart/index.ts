@@ -4,6 +4,7 @@ import { meta } from './meta';
 import { CFG } from './config';
 import { buildArt } from './art';
 import { Fart3D } from './stage3d';
+import { ASSETS, loadFartAssets } from './sprites';
 
 type Kind = 'bird' | 'balloon' | 'storm' | 'plane' | 'ufo' | 'meteor';
 interface Obs { near?: boolean; kind: Kind; x: number; y: number; vx: number; vy: number; rx: number; ry: number; ph: number; col: string; wrap: boolean; }
@@ -80,8 +81,9 @@ const mod: GameModule = {
       }
     }
 
+    let ready = false;
     function tap(clientX?: number) {
-      if (finished || st === 'dying' || st === 'done') return;
+      if (!ready || finished || st === 'dying' || st === 'done') return;
       const now = performance.now();
       if (clientX !== undefined) tx = clamp((clientX - OX) / S, 36, W - 36);
       if (st === 'ready') {
@@ -245,11 +247,22 @@ const mod: GameModule = {
       g.beginPath(); g.arc(x, y, 22 * s, 0, 6.3); g.arc(x + 24 * s, y - 8 * s, 28 * s, 0, 6.3); g.arc(x + 54 * s, y, 22 * s, 0, 6.3); g.arc(x + 26 * s, y + 8 * s, 24 * s, 0, 6.3); g.fill(); g.globalAlpha = 1;
     }
 
+    // 背景画像: 画面高の2倍にして上昇に合わせて下へスクロール（地上の街→青空→宇宙）。高空は従来のゾーン色を重ねて星雲色へ。
+    function drawBgImage(m: number) {
+      const im = ASSETS.bg!, dh = H * 2, dw = im.width / im.height * dh, x0 = -OX / S, vw = CW / S;
+      const travel = dh - H - 20, d = clamp((camY + 90) * (travel / (400 * UPM)), 0, travel);
+      const bottom = H + 20 + d, x = x0 + (vw - dw) * 0.85;
+      g.drawImage(im, x, bottom - dh, dw, dh);
+      if (m > 500) { const [c1, c2] = zoneColors(m); const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, c1); gr.addColorStop(1, c2); g.globalAlpha = clamp((m - 500) / 600, 0, 1) * 0.85; g.fillStyle = gr; g.fillRect(x0 - 2, 0, vw + 4, H); g.globalAlpha = 1; }
+    }
     function drawBg() {
       const m = Math.max(0, (camY + H * 0.5) / UPM);
       const [c1, c2] = zoneColors(m);
+      if (ASSETS.bg) drawBgImage(m);
+      else {
       const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, c1); gr.addColorStop(1, c2);
       g.fillStyle = gr; g.fillRect(-OX / S - 2, 0, CW / S + 4, H);
+      }
       // stars
       const sa = clamp((m - 280) / 450, 0, 1);
       if (sa > 0) {
@@ -271,7 +284,7 @@ const mod: GameModule = {
       }
       // clouds (hash band)
       const ca = clamp(1 - (m - 380) / 250, 0, 1) * clamp((m + 20) / 100, 0.35, 1);
-      if (ca > 0) {
+      if (ca > 0 && !ASSETS.bg) {
         const band = 150; const i0 = Math.floor((camY - 80) / band), i1 = Math.floor((camY + H + 80) / band);
         for (let i = Math.max(1, i0); i <= i1; i++) {
           const dens = clamp((i * band / UPM - 60) / 80, 0.25, 1);
@@ -300,7 +313,7 @@ const mod: GameModule = {
       }, 0.6);
       // city + ground
       const gy = sy(0);
-      if (gy < H + 400) {
+      if (gy < H + 400 && !ASSETS.bg) {
         g.fillStyle = '#6a7a9a';
         for (let i = 0; i < 9; i++) {
           const bw = 38 + hash(i) * 26, bx = i * 46 - 8, bh = 80 + hash(i + 3) * 160, by = H - (0 - camY * 0.8) ;
@@ -312,7 +325,21 @@ const mod: GameModule = {
       }
     }
 
+    // 写真スプライト: 主人公(座った姿勢)とカラス。無ければ従来描画。
+    function drawHeroSprite(sx: number, sY: number, r: number) {
+      const s = ASSETS.hero!, h = CFG.playerH * 1.15, w = h * s.aspect;
+      g.save(); g.translate(sx, sY); g.rotate(r);
+      if (st === 'dying') { g.scale(1 + Math.sin(t * 30) * 0.03, 1); }
+      g.drawImage(s.c, -w / 2, -h / 2, w, h); g.restore();
+    }
+    function drawCrow(o: Obs) {
+      const y = sy(o.y); if (y < -80 || y > H + 80) return;
+      const s = ASSETS.crow!, w = 72, h = w / s.aspect, fl = Math.sin(o.ph * 14), f = o.vx >= 0 ? 1 : -1;
+      g.save(); g.translate(o.x, y); g.scale(f, 1); g.rotate(-0.12 + fl * 0.04); g.scale(1, 1 + fl * 0.1);
+      g.drawImage(s.c, -w / 2, -h / 2, w, h); g.restore();
+    }
     function drawObs(o: Obs) {
+      if (o.kind === 'bird' && ASSETS.crow) { drawCrow(o); return; }
       const x = o.x, y = sy(o.y);
       if (y < -80 || y > H + 80) return;
       g.save(); g.translate(x, y);
@@ -379,7 +406,8 @@ const mod: GameModule = {
         g.save(); g.translate(sx, 0); g.fillStyle = gr; g.beginPath(); g.moveTo(-9, fy); g.quadraticCurveTo(-18 - jp * 6, fy + len * 0.5, 0, fy + len); g.quadraticCurveTo(18 + jp * 6, fy + len * 0.5, 9, fy); g.fill(); g.restore();
       }
       const e = st === 'dying' ? expr : expr;
-      drawUncle(g, { x: sx, y: sY, h: CFG.playerH, rot: st === 'dying' ? rot : tilt, expr: e === 'angry' ? 'angry' : e, flail: st === 'play' ? clamp(Math.abs(vy) / 500, 0.2, 1) : st === 'dying' ? 1 : 0, t, type: 'normal', skin: ctx.unlockedSkins.includes('skin_normal') ? 'skin_normal' : undefined });
+      if (ASSETS.hero) drawHeroSprite(sx, sY, st === 'dying' ? rot : tilt);
+      else drawUncle(g, { x: sx, y: sY, h: CFG.playerH, rot: st === 'dying' ? rot : tilt, expr: e === 'angry' ? 'angry' : e, flail: st === 'play' ? clamp(Math.abs(vy) / 500, 0.2, 1) : st === 'dying' ? 1 : 0, t, type: 'normal', skin: ctx.unlockedSkins.includes('skin_normal') ? 'skin_normal' : undefined });
       if (bubbleT > 0) drawBubble(g, bubbleTxt, clamp(sx, 70, W - 70), sY - CFG.playerH * 0.7, 20);
     }
 
@@ -434,14 +462,16 @@ const mod: GameModule = {
       const sx = shake > 0 ? rnd(-shake, shake) : 0, sy2 = shake > 0 ? rnd(-shake, shake) : 0;
       g = gBg!; fx(g, sx, sy2); drawBg(); speedLines(); g.restore();
       stg.setMap(S, OX, H, camY, sx, sy2); stg.begin();
-      for (const o of obs) if (o.y > camY - 120 && o.y < camY + H + 160) stg.obstacle(o);
+      for (const o of obs) if (o.y > camY - 120 && o.y < camY + H + 160 && !(o.kind === 'bird' && ASSETS.crow)) stg.obstacle(o);
       const jp = st === 'play' ? clamp(jet / 0.3, 0, 1) : 0, dead = st === 'dying' && dyingT > 0.6;
       stg.parts(parts, H);
       const ex = dead ? 'dead' : expr;
       stg.player(px, py, CFG.playerH, st === 'dying' ? rot : tilt, ex, st === 'play' ? clamp(Math.abs(vy) / 500, 0.2, 1) : st === 'dying' ? 1 : 0, t, jp,
-        st === 'dying' ? rot * 0.35 : tilt * 2.2 + Math.sin(t * 2) * 0.12, st === 'play' ? -clamp(vy / CFG.maxUp, -1, 1) * 0.18 : 0, true);
+        st === 'dying' ? rot * 0.35 : tilt * 2.2 + Math.sin(t * 2) * 0.12, st === 'play' ? -clamp(vy / CFG.maxUp, -1, 1) * 0.18 : 0, true, !ASSETS.hero);
       stg.end(); stg.render();
       g = gTop; fx(g, sx, sy2);
+      if (ASSETS.crow) for (const o of obs) if (o.kind === 'bird') drawCrow(o);
+      if (ASSETS.hero) drawHeroSprite(px, sy(py), st === 'dying' ? rot : tilt);
       if (bubbleT > 0) drawBubble(g, bubbleTxt, clamp(px, 70, W - 70), sy(py) - CFG.playerH * 0.7, 20);
       overlay(); g.restore();
     }
@@ -464,11 +494,13 @@ const mod: GameModule = {
       const dt = Math.min(0.033, last ? (ts - last) / 1000 : 0.016); last = ts;
       update(dt); render();
     }
-    raf = requestAnimationFrame(frame);
+    // 画像を先読みしてから開始（読み込み中は入力不可）。失敗(null)でも従来描画で進行。
+    let destroyed = false;
+    loadFartAssets().catch(() => { /* フォールバック */ }).then(() => { if (destroyed) return; ready = true; last = 0; raf = requestAnimationFrame(frame); });
 
     return {
       destroy() {
-        cancelAnimationFrame(raf); timers.forEach(clearTimeout);
+        destroyed = true; cancelAnimationFrame(raf); timers.forEach(clearTimeout);
         canvas.removeEventListener('pointerdown', onDown); window.removeEventListener('keydown', onKey); window.removeEventListener('resize', resize);
         audio.stopBgm(); canvas.remove(); bgCanvas?.remove(); if (stage) { stage.dispose(); stage = null; } use3d = false; finished = true; void lastTapAt; void dprC;
         delete (window as any).__fart;

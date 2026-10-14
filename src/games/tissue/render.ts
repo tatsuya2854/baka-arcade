@@ -1,10 +1,35 @@
 import { CFG } from './config';
 import type { Snap } from './sim';
+import { loadImg, drawCover } from '../../core/images';
 
+const SLUG = 'tissue-one';
+const IMG: { bg: HTMLImageElement | null; hero: HTMLImageElement | null; loaded: boolean } = { bg: null, hero: null, loaded: false };
+let loadP: Promise<void> | null = null;
+/** 画像を先読み（1回だけ。失敗/未生成は null のまま=旧描画にフォールバック）。 */
+export function ensureImgs(): Promise<void> {
+  return loadP ??= Promise.all([loadImg(SLUG, 'bg'), loadImg(SLUG, 'hero')]).then(([b, h]) => { IMG.bg = b; IMG.hero = h; IMG.loaded = true; });
+}
+let bgC: HTMLCanvasElement | null = null, bgKey = '';
+/** 背景はオフスクリーンに1回だけ描いて使い回す */
+function drawBg(g: CanvasRenderingContext2D, w: number, h: number) {
+  const dpr = g.getTransform().a || 1, key = `${w}x${h}@${dpr}`;
+  if (!bgC || bgKey !== key) {
+    bgC ??= document.createElement('canvas'); bgC.width = Math.round(w * dpr); bgC.height = Math.round(h * dpr); bgKey = key;
+    const c = bgC.getContext('2d')!; c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawCover(c, IMG.bg!, w, h, 0.5, 0.75);
+    const gr = c.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, 'rgba(30,22,14,0.5)'); gr.addColorStop(0.3, 'rgba(30,22,14,0.12)'); gr.addColorStop(0.7, 'rgba(30,22,14,0)'); gr.addColorStop(1, 'rgba(30,22,14,0.2)');
+    c.fillStyle = gr; c.fillRect(0, 0, w, h);
+  }
+  g.drawImage(bgC, 0, 0, w, h);
+}
+// hero画像(正方形)内の位置（割合）: 取り出し口の中心 / 箱の底
+const HS = { sx: 0.498, sy: 0.399, bot: 0.88, cropTop: 0.36, bottom: 0.93, holeRx: 0.165, holeRy: 0.034 };
+
+const HS0 = { sy: 0.399, bot: 0.88 };
 export interface Lay { cx: number; slotY: number; L: number; ws: number; bw: number; fh: number; dh: number; S: number; tableTop: number; w: number; h: number }
 export const layout = (w: number, h: number): Lay => {
   const S = Math.min(w, h * 0.5), bw = S * 0.78;
-  return { cx: w / 2, slotY: h * 0.7, L: Math.min(h * 0.3, S * 0.72), ws: S * 0.5, bw, fh: bw * 0.34, dh: bw * 0.085, S, tableTop: h * 0.58, w, h };
+  return { cx: w / 2, slotY: IMG.bg && IMG.hero ? h * 0.725 - S * 0.9 * (HS0.bot - HS0.sy) : h * 0.7, L: Math.min(h * 0.3, S * 0.72), ws: IMG.bg && IMG.hero ? S * 0.42 : S * 0.5, bw, fh: bw * 0.34, dh: bw * 0.085, S, tableTop: h * 0.58, w, h };
 };
 const sm = (x: number) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
 export const hash = (i: number) => { const s = Math.sin(i * 12.9898 + 4.1) * 43758.5453; return s - Math.floor(s); };
@@ -100,9 +125,12 @@ function finger(g: CanvasRenderingContext2D, x: number, y: number, r: number, si
 export interface Opt { hud?: boolean; label?: string; pop?: number; timeFrac?: number }
 
 export function drawScene(g: CanvasRenderingContext2D, w: number, h: number, s: Snap, time: number, o: Opt = {}) {
-  const lay = layout(w, h), { cx, slotY, L, ws: W, bw, fh, dh, tableTop } = lay;
+  const lay = layout(w, h), { cx, slotY, L, ws: W, bw, fh, dh, tableTop, S } = lay;
+  let gr: CanvasGradient;
+  const hero = IMG.bg && IMG.hero ? IMG.hero : null;
+  if (hero) drawBg(g, w, h); else {
   // 壁
-  let gr = g.createLinearGradient(0, 0, 0, tableTop); gr.addColorStop(0, '#3a4350'); gr.addColorStop(1, '#262c35');
+  gr = g.createLinearGradient(0, 0, 0, tableTop); gr.addColorStop(0, '#3a4350'); gr.addColorStop(1, '#262c35');
   g.fillStyle = gr; g.fillRect(0, 0, w, tableTop + 1);
   // テーブル
   gr = g.createLinearGradient(0, tableTop, 0, h); gr.addColorStop(0, '#5a524b'); gr.addColorStop(0.5, '#3b3531'); gr.addColorStop(1, '#2a2522');
@@ -112,8 +140,24 @@ export function drawScene(g: CanvasRenderingContext2D, w: number, h: number, s: 
   gr = g.createRadialGradient(cx - w * 0.1, h * 0.28, 10, cx, h * 0.5, h * 0.7); gr.addColorStop(0, 'rgba(255,244,225,0.16)'); gr.addColorStop(1, 'rgba(255,244,225,0)');
   g.fillStyle = gr; g.fillRect(0, 0, w, h);
 
+  }
   g.save(); g.translate(s.shx, s.shy);
   const topF = slotY + dh, botY = topF + fh;
+  const rx = W * 0.46, ry = dh * 0.62 - s.press * 1.5;
+  if (hero) {
+    // 箱の画像（上のティッシュは切り落とし、取り出し口は自前で描く）
+    const Hh = S * 0.9, x0 = cx - HS.sx * Hh, y0 = slotY - HS.sy * Hh, bot = y0 + HS.bot * Hh;
+    const iw = hero.width, ih = hero.height, sy0 = HS.cropTop * ih, sh = (HS.bottom - HS.cropTop) * ih;
+    // 接地影（光は右の窓 → 影は左へ）
+    g.save(); g.translate(cx - Hh * 0.08, bot - Hh * 0.01); g.scale(1, 0.2);
+    gr = g.createRadialGradient(0, 0, Hh * 0.05, 0, 0, Hh * 0.42); gr.addColorStop(0, 'rgba(40,28,16,0.38)'); gr.addColorStop(1, 'rgba(40,28,16,0)');
+    g.fillStyle = gr; g.beginPath(); g.arc(0, 0, Hh * 0.42, 0, Math.PI * 2); g.fill(); g.restore();
+    g.drawImage(hero, 0, sy0, iw, sh, x0, y0 + HS.cropTop * Hh + s.press * 1.5, Hh, (HS.bottom - HS.cropTop) * Hh);
+    const hrx = HS.holeRx * Hh, hry = HS.holeRy * Hh - s.press * 1.5;
+    gr = g.createRadialGradient(cx, slotY, 2, cx, slotY, hrx); gr.addColorStop(0, '#1d1a17'); gr.addColorStop(1, '#4a443c');
+    g.fillStyle = gr; g.beginPath(); g.ellipse(cx, slotY, hrx, hry, 0, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = 'rgba(255,255,255,0.55)'; g.lineWidth = 1.2; g.stroke();
+  } else {
   // 接地影
   for (let i = 0; i < 3; i++) { g.fillStyle = `rgba(0,0,0,${0.16 - i * 0.04})`; g.beginPath(); g.ellipse(cx + bw * 0.03, botY - 2, bw * (0.56 + i * 0.07), dh * (0.9 + i * 0.55), 0, 0, Math.PI * 2); g.fill(); }
   // 前面
@@ -134,11 +178,12 @@ export function drawScene(g: CanvasRenderingContext2D, w: number, h: number, s: 
   g.fillStyle = gr; g.beginPath(); g.moveTo(cx - bw * 0.46, slotY - dh); g.lineTo(cx + bw * 0.46, slotY - dh); g.lineTo(cx + bw / 2, topF); g.lineTo(cx - bw / 2, topF); g.closePath(); g.fill();
   g.strokeStyle = 'rgba(255,255,255,0.8)'; g.lineWidth = 1; g.beginPath(); g.moveTo(cx - bw / 2, topF); g.lineTo(cx + bw / 2, topF); g.stroke();
   // 取り出し口
-  const rx = W * 0.46, ry = dh * 0.62 - s.press * 1.5;
   const wavy = (k: number, ex: number) => { g.beginPath(); for (let i = 0; i <= 36; i++) { const a = i / 36 * Math.PI * 2, r = 1 + Math.sin(a * 3 + k) * 0.05 + Math.sin(a * 5 + 1) * 0.035; const x = cx + Math.cos(a) * (rx + ex) * r, y = slotY + Math.sin(a) * (ry + ex * 0.4) * r; i ? g.lineTo(x, y) : g.moveTo(x, y); } g.closePath(); };
   wavy(0, rx * 0.28); g.fillStyle = 'rgba(255,255,255,0.4)'; g.fill(); g.strokeStyle = 'rgba(255,255,255,0.55)'; g.lineWidth = 1; g.stroke();
   gr = g.createRadialGradient(cx, slotY, 2, cx, slotY, rx); gr.addColorStop(0, '#1d1c1a'); gr.addColorStop(1, '#4c4944');
   wavy(1.3, 0); g.fillStyle = gr; g.fill(); g.strokeStyle = 'rgba(255,255,255,0.7)'; g.lineWidth = 1.6; g.stroke();
+
+  }
 
   // ティッシュ
   const hx = s.dx * L, swx = s.sw * L;
@@ -156,7 +201,7 @@ export function drawScene(g: CanvasRenderingContext2D, w: number, h: number, s: 
   if (s.fall >= 0.17 && s.m + 1 < CFG.maxSheets) ribbon(g, lay, (Y) => Y * 0, 0, s.nextY * L, 7.7 + s.m, 0.5, time, {});
   if (s.fall > 0) pile(g, lay, s, time);
   // 手前の縁
-  g.strokeStyle = 'rgba(255,255,255,0.8)'; g.lineWidth = 2; g.beginPath(); g.ellipse(cx, slotY, rx, ry, 0, 0.05 * Math.PI, 0.95 * Math.PI); g.stroke();
+  if (!hero) { g.strokeStyle = 'rgba(255,255,255,0.8)'; g.lineWidth = 2; g.beginPath(); g.ellipse(cx, slotY, rx, ry, 0, 0.05 * Math.PI, 0.95 * Math.PI); g.stroke(); }
   g.restore();
 
   // ヒント指

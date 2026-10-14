@@ -1,4 +1,11 @@
 import { CFG } from './config';
+import { loadImg } from '../../core/images';
+
+const SLUG = 'ketchup-pour';
+/** 生成画像(読めなければ null=旧描画にフォールバック)。モジュール共有・小さいので解放不要 */
+export const KI: { bg: HTMLImageElement | null; hero: HTMLImageElement | null } = { bg: null, hero: null };
+let kiP: Promise<void> | null = null;
+export const loadKetchupImgs = (): Promise<void> => (kiP ??= Promise.all([loadImg(SLUG, 'bg'), loadImg(SLUG, 'hero')]).then(([b, h]) => { KI.bg = b; KI.hero = h; }));
 
 export interface Layout {
   w: number; h: number; cx: number; cy: number; rx: number; ry: number;
@@ -6,8 +13,16 @@ export interface Layout {
 }
 /** ゲーム/リプレイ用(ボトルあり) と ポスター用(皿を中央に大きく) */
 export function layoutFor(w: number, h: number, poster = false): Layout {
-  const cx = w / 2;
+  let cx = w / 2;
   let rx: number, cy: number;
+  if (!poster && KI.bg) {
+    // 背景写真の皿(真上から・円形)のきれいな中央に合わせる。ふちぎわのポテトを避ける
+    const b = KI.bg, sc = Math.max(w / b.width, h / b.height), dw = b.width * sc, dh = b.height * sc;
+    cx = w - dw + 0.70 * dw; cy = (h - dh) * 0.5 + 0.485 * dh;
+    rx = Math.min(0.29 * dw * 0.95, w * 0.44);
+    const kx = rx / CFG.plateR, ky = kx, s = rx / 165, px = cx, py = cy;
+    return { w, h, cx, cy, rx, ry: rx, kx, ky, px, py, tipX: px, tipY: py - rx * 0.82, s, poster };
+  }
   if (poster) { rx = Math.min(w * 0.46, h * 0.6); cy = h * 0.5; } else { rx = Math.min(w * 0.44, h * 0.3); cy = h * 0.66; }
   const ry = rx * 0.6, kx = rx / CFG.plateR, ky = ry / CFG.plateR;
   const px = cx, py = cy - ry * 0.04;
@@ -24,6 +39,14 @@ export function buildBackdrop(L: Layout, scale: number): HTMLCanvasElement {
   const c = document.createElement('canvas'); c.width = Math.max(2, Math.round(L.w * scale)); c.height = Math.max(2, Math.round(L.h * scale));
   const g = c.getContext('2d')!; g.scale(scale, scale);
   const { w, h, cx, cy, rx, ry } = L;
+  if (!L.poster && KI.bg) {
+    const b = KI.bg, sc = Math.max(w / b.width, h / b.height);
+    g.drawImage(b, w - b.width * sc, (h - b.height * sc) * 0.5, b.width * sc, b.height * sc);
+    // 上部のHUD文字が読めるよう暗幕を薄く
+    const gr = g.createLinearGradient(0, 0, 0, h * 0.2); gr.addColorStop(0, 'rgba(20,10,4,.35)'); gr.addColorStop(1, 'rgba(20,10,4,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, w, h * 0.2);
+    return c;
+  }
   // カウンター(淡い面)
   let gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#e4dfd6'); gr.addColorStop(0.55, '#d6d0c5'); gr.addColorStop(1, '#bfb8ab');
   g.fillStyle = gr; g.fillRect(0, 0, w, h);
@@ -87,7 +110,7 @@ export class KetchupShader {
       for (let j = 1; j < N - 1; j++) for (let i = 0; i < N; i++) { const k = j * N + i; A[k] = (B[k - N] + 2 * B[k] + B[k + N]) * 0.25; }
     }
     const H = A; scale = 1;
-    const lx = -0.42, ly = -0.52, lz = 0.74; const ln = Math.hypot(lx, ly, lz); const Lx = lx / ln, Ly = ly / ln, Lz = lz / ln;
+    const lx = KI.bg ? 0.42 : -0.42, ly = -0.52, lz = 0.74; const ln = Math.hypot(lx, ly, lz); const Lx = lx / ln, Ly = ly / ln, Lz = lz / ln;
     let hx = Lx, hy = Ly, hz = Lz + 1; const hn = Math.hypot(hx, hy, hz); hx /= hn; hy /= hn; hz /= hn;
     for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
       const idx = j * N + i, h = H[idx];
@@ -133,6 +156,7 @@ export function drawTarget(g: CanvasRenderingContext2D, L: Layout, t: number, al
 
 /** ボトル。ノズル先端が (L.tipX,L.tipY)。theta=傾き(0..1), squeeze=握り(0..1) */
 export function drawBottle(g: CanvasRenderingContext2D, L: Layout, theta: number, squeeze: number) {
+  if (KI.hero) { drawBottleImg(g, L, theta, squeeze, KI.hero); return; }
   const s = L.s; g.save(); g.translate(L.tipX, L.tipY); g.rotate((1 - theta) * 0.95);
   const bw = 34 * s;
   const sq = 1 - 0.1 * squeeze, st = 1 + 0.035 * squeeze;
@@ -192,5 +216,27 @@ export function drawDrop(g: CanvasRenderingContext2D, x: number, y: number, r: n
   const gr = g.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.1, x, y, r * 1.1); gr.addColorStop(0, '#ff7766'); gr.addColorStop(0.35, '#d9231f'); gr.addColorStop(1, '#6a0810');
   g.fillStyle = gr; g.beginPath(); g.ellipse(x, y, r * 0.85, r * 1.1, 0, 0, Math.PI * 2); g.fill();
   g.fillStyle = 'rgba(255,255,255,.8)'; g.beginPath(); g.arc(x - r * 0.3, y - r * 0.4, Math.max(0.6, r * 0.2), 0, Math.PI * 2); g.fill();
+  g.restore();
+}
+
+/** 生成画像のボトル(ポテト付き原画からボトル部分だけ切り出す)。傾き・握りのつぶれは既存ロジックのまま */
+function drawBottleImg(g: CanvasRenderingContext2D, L: Layout, theta: number, squeeze: number, im: HTMLImageElement) {
+  const k = im.width / 1254, sx = 858 * k, sy = 24 * k, sw = 336 * k, sh = 690 * k;   // ボトルだけの範囲(下端はココットに隠れるため y=715 で切り、丸く見せる)
+  const tipX = (1052 - 858) * k;                       // ノズル先端の x(切り出し内)
+  const H = 238 * L.s, sc = H / sh, bodyW = sw * sc;
+  const sq = 1 - 0.1 * squeeze, st = 1 + 0.035 * squeeze;
+  g.save(); g.translate(L.tipX, L.tipY); g.rotate((1 - theta) * 0.95);
+  // 接地しない影(皿へ落ちる柔らかい影)
+  g.fillStyle = 'rgba(30,18,8,.16)'; g.beginPath(); g.ellipse(10 * L.s, 6 * L.s, 20 * L.s, 7 * L.s, 0, 0, Math.PI * 2); g.fill();
+  g.scale(sq, st); g.rotate(Math.PI);   // 画像はノズルが上 → ノズルを下に
+  g.beginPath(); g.roundRect(-tipX * sc - 2, -2, bodyW + 4, H + 2, [0, 0, 44 * sc * 1.2, 44 * sc * 1.2]); g.clip();
+  g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+  // 胴体を横ストリップで描き、握った所(中ほど)だけ細くする
+  const n = 24;
+  for (let i = 0; i < n; i++) {
+    const f0 = i / n, fm = f0 + 0.5 / n;
+    const pinch = 1 - 0.18 * squeeze * Math.exp(-Math.pow((fm - 0.5) / 0.22, 2));
+    g.drawImage(im, sx, sy + f0 * sh, sw, sh / n + 0.6, -tipX * sc * pinch, f0 * H, bodyW * pinch, H / n + 1);
+  }
   g.restore();
 }

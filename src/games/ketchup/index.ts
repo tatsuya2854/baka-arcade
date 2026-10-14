@@ -3,7 +3,7 @@ import { haptic } from '../../core/haptic';
 import { meta } from './meta';
 import { CFG, flowQ, gPerUnit, scoreFromErr, targetVolume } from './config';
 import { Sim } from './sim';
-import { KetchupShader, buildBackdrop, drawBottle, drawDrop, drawStream, drawTarget, layoutFor, type Layout } from './scene';
+import { KetchupShader, buildBackdrop, drawBottle, drawDrop, drawStream, drawTarget, layoutFor, loadKetchupImgs, type Layout } from './scene';
 import { KSound } from './sound';
 import { buildArt, QSCALE, type Frame } from './art';
 
@@ -215,11 +215,16 @@ const mod: GameModule = {
       while (acc >= FIXED) { update(FIXED); acc -= FIXED; if (phase === 'done') { acc = 0; break; } }
       render();
     };
-    raf = requestAnimationFrame(loop);
+    // 画像を先読みしてから開始(読めなければ旧描画のまま)。読み込み中は何も描かない
+    let dead = false;
+    loadKetchupImgs().then(() => {
+      if (dead) return;
+      W = 0; resize(); last = performance.now(); raf = requestAnimationFrame(loop);
+    });
 
     return {
       destroy() {
-        cancelAnimationFrame(raf); ro.disconnect(); window.removeEventListener('resize', resize);
+        dead = true; cancelAnimationFrame(raf); ro.disconnect(); window.removeEventListener('resize', resize);
         window.removeEventListener('keydown', onKey); window.removeEventListener('keyup', onKey); window.removeEventListener('blur', onBlur);
         cv.removeEventListener('pointerdown', onDown); cv.removeEventListener('pointerup', onUp); cv.removeEventListener('pointercancel', onUp); cv.removeEventListener('lostpointercapture', onUp); cv.removeEventListener('contextmenu', noCtx);
         sound.destroy(); audio.stopBgm(); cv.remove(); backdrop = null; drips.length = 0; parts.length = 0;

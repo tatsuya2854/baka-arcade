@@ -1,5 +1,7 @@
 import type { GameModule, GameContext, ResultArt } from '../../core/types';
 import { meta } from './meta';
+import { loadImg, drawCover } from '../../core/images';
+
 import { NoseStage3D, newFaceP } from './face3d';
 import { stageCfg, JUDGE, POINTS, COMBO, STAGE_BONUS, SPECIAL_MULT, LIVES, MIN_PULL, REACT_MS, BGM, HAIR, TITLE, type StageCfg } from './config';
 
@@ -102,8 +104,30 @@ const mod: GameModule = {
       if (bgCv) { bgCv.width = cv.width; bgCv.height = cv.height; }
       stage3d?.resize(W, H, dpr);
     };
+    // ---- 生成画像（bg=洗面所背景 / hero=ピンセット / item=毛）。無ければ従来描画にフォールバック ----
+    const SLUG = 'nosehair-pull';
+    let imgBg: HTMLImageElement | null = null, imgTw: HTMLImageElement | null = null;
+    let bgOff: HTMLCanvasElement | null = null, twShadow: HTMLCanvasElement | null = null;
+    const buildBgOff = () => {
+      if (!imgBg || !W) return;
+      const c = bgOff ?? (bgOff = document.createElement('canvas')); c.width = cv.width; c.height = cv.height;
+      const q = c.getContext('2d')!; q.setTransform(dpr, 0, 0, dpr, 0, 0);
+      drawCover(q, imgBg, W, H, 0.5, 0.5);
+      // 洗面台の明るい冷白光に合わせる: 上から薄い白、周辺をわずかに落とす
+      const lg = q.createLinearGradient(0, 0, 0, H); lg.addColorStop(0, 'rgba(255,255,255,.10)'); lg.addColorStop(1, 'rgba(30,45,70,.22)'); q.fillStyle = lg; q.fillRect(0, 0, W, H);
+      const vg = q.createRadialGradient(W / 2, H * 0.4, W * 0.4, W / 2, H * 0.4, H * 0.75); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(20,30,50,.28)'); q.fillStyle = vg; q.fillRect(0, 0, W, H);
+    };
     resize();
-    window.addEventListener('resize', resize);
+    const onResize = () => { resize(); buildBgOff(); };
+    window.addEventListener('resize', onResize);
+    Promise.all([loadImg(SLUG, 'bg'), loadImg(SLUG, 'hero')]).then(([b, t]) => {
+      if (destroyed) return;
+      imgBg = b; imgTw = t; buildBgOff();
+      if (t) { // ピンセットの接地影（シルエットを1回だけ作る）
+        const c = twShadow = document.createElement('canvas'); c.width = t.width; c.height = t.height;
+        const q = c.getContext('2d')!; q.drawImage(t, 0, 0); q.globalCompositeOperation = 'source-in'; q.fillStyle = '#1a2538'; q.fillRect(0, 0, c.width, c.height);
+      }
+    });
 
     // ---- 状態 ----
     let phase: Phase = 'idle', stage = 1, lives = LIVES, score = 0, combo = 0, plucked = 0;
@@ -361,7 +385,7 @@ const mod: GameModule = {
     /** 3D顔の状態を2D版と同じロジックから組み立てる（オブジェクト再利用） */
     function setup3d(G: ReturnType<typeof geom>, zoom: number, sx: number, sy: number) {
       const p = fp; p.W = W; p.H = H; p.hx = G.hx; p.hy = G.hy; p.rx = G.rx; p.ry = G.ry; p.nr = G.nr; p.nx = G.nx; p.ny = G.ny; p.time = time;
-      p.zoom = zoom; p.ox = sx; p.oy = sy; p.hairKind = 0; p.fly = 0; p.hand = true; p.waves = cfg.waves; p.tilt = 0; p.flick = 0; p.lookX = 0;
+      p.zoom = zoom; p.ox = sx; p.oy = sy; p.hairKind = 0; p.fly = 0; p.hand = true; p.noHand = !!imgTw; p.waves = cfg.waves; p.tilt = 0; p.flick = 0; p.lookX = 0;
       const tiltOf = (pg: number) => pg * 0.06 * Math.sin(1) + (reactOk && phase === 'react' ? Math.sin(reactT * 14) * 0.05 * Math.max(0, 1 - reactT) : 0);
       if (phase === 'pull') {
         const hh = tipPos(gauge, 0), ex = exprOf(gauge);
@@ -388,15 +412,36 @@ const mod: GameModule = {
       }
     }
 
+    /** ピンセット画像。先端を毛の先に合わせ、持ち手は毛の引かれる向きへ。前景2D(ズーム変換済み)に描く。 */
+    function drawTweezers(G: ReturnType<typeof geom>) {
+      const t = imgTw!; let x = 0, y = 0, rot = 0, open = 0, a = 1;
+      if (phase === 'pull' || (phase === 'idle')) {
+        const hh = tipPos(phase === 'pull' ? gauge : 0, 0); x = hh.x; y = hh.y;
+        rot = Math.atan2(hh.y - G.rootY, hh.x - G.rootX);
+        if (phase === 'idle') { const k = 36 + Math.sin(time * 3) * 4; x += Math.cos(rot) * k; y += Math.sin(rot) * k; a = 0.95; }
+      } else if (phase === 'react' && reactOk) {
+        x = tip.x; y = tip.y - 10; rot = tip.rot - Math.PI / 2; open = Math.min(1, reactT * 3);
+      } else return;
+      const sz = W * 0.5, s = sz / t.width, ax = 0.1 * t.width, ay = 0.857 * t.height;
+      const draw = (img: CanvasImageSource, dx: number, dy: number, al: number) => {
+        g.save(); g.globalAlpha = al; g.translate(x + dx, y + dy); g.rotate(rot + 0.714 + open * 0.0); g.scale(s, s); g.drawImage(img, -ax, -ay, t.width, t.height); g.restore();
+      };
+      if (twShadow) draw(twShadow, 7, 11, 0.22 * a);
+      draw(t, 0, 0, a);
+    }
+
     function render() {
       g.setTransform(dpr, 0, 0, dpr, 0, 0);
       const gb = use3d && gBg ? gBg : g;
       if (gb !== g) gb.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const bg = gb.createRadialGradient(W / 2, H * 0.4, 20, W / 2, H * 0.4, H * 0.8);
-      bg.addColorStop(0, '#ffcf8a'); bg.addColorStop(1, '#5a2a6a'); gb.fillStyle = bg; gb.fillRect(0, 0, W, H);
+      if (bgOff) { gb.save(); gb.setTransform(1, 0, 0, 1, 0, 0); gb.drawImage(bgOff, 0, 0); gb.restore(); }
+      else {
+        const bg = gb.createRadialGradient(W / 2, H * 0.4, 20, W / 2, H * 0.4, H * 0.8);
+        bg.addColorStop(0, '#ffcf8a'); bg.addColorStop(1, '#5a2a6a'); gb.fillStyle = bg; gb.fillRect(0, 0, W, H);
+      }
       // 集中線
       const pullG = phase === 'pull' ? gauge : 0;
-      if (pullG > 0.4) { gb.save(); gb.strokeStyle = `rgba(255,255,255,${(pullG - 0.4) * 0.5})`; gb.lineWidth = 3; const G = geom(); for (let i = 0; i < 24; i++) { const a = i / 24 * 6.283 + time * 0.2; gb.beginPath(); gb.moveTo(G.hx + Math.cos(a) * W * 0.6, G.hy + Math.sin(a) * W * 0.6); gb.lineTo(G.hx + Math.cos(a) * W * 1.1, G.hy + Math.sin(a) * W * 1.1); gb.stroke(); } gb.restore(); }
+      if (pullG > 0.4) { gb.save(); gb.strokeStyle = bgOff ? `rgba(40,70,110,${(pullG - 0.4) * 0.35})` : `rgba(255,255,255,${(pullG - 0.4) * 0.5})`; gb.lineWidth = 3; const G = geom(); for (let i = 0; i < 24; i++) { const a = i / 24 * 6.283 + time * 0.2; gb.beginPath(); gb.moveTo(G.hx + Math.cos(a) * W * 0.6, G.hy + Math.sin(a) * W * 0.6); gb.lineTo(G.hx + Math.cos(a) * W * 1.1, G.hy + Math.sin(a) * W * 1.1); gb.stroke(); } gb.restore(); }
       if (use3d) g.clearRect(0, 0, W, H);
       // ズーム＆ぷるぷる
       const G = geom();
@@ -408,6 +453,7 @@ const mod: GameModule = {
 
       if (use3d && stage3d) {
         setup3d(G, zoom, shx, shy); stage3d.update(fp); stage3d.render();
+        if (imgTw) drawTweezers(G);
         // スポッ！ 鼻から出る放射（前景2D）
         if (phase === 'react' && reactOk && reactT < 0.35) { g.strokeStyle = `rgba(255,255,255,${1 - reactT * 3})`; g.lineWidth = 6; for (let i = 0; i < 10; i++) { const a = i / 10 * 6.283; g.beginPath(); g.moveTo(G.rootX + Math.cos(a) * 30, G.rootY + Math.sin(a) * 30); g.lineTo(G.rootX + Math.cos(a) * (60 + reactT * 300), G.rootY + Math.sin(a) * (60 + reactT * 300)); g.stroke(); } }
       } else if (phase === 'pull') {
@@ -515,12 +561,12 @@ const mod: GameModule = {
     return {
       destroy() {
         destroyed = true; cancelAnimationFrame(raf); audio.stopBgm();
-        window.removeEventListener('resize', resize);
+        window.removeEventListener('resize', onResize);
         window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onUp);
         window.removeEventListener('keydown', onKeyD); window.removeEventListener('keyup', onKeyU);
         cv.removeEventListener('pointerdown', onDown);
         delete (window as any).__nose;
-        cv.remove(); bgCv?.remove();
+        cv.remove(); bgCv?.remove(); bgOff = null; twShadow = null; imgBg = null; imgTw = null;
         if (stage3d) { stage3d.dispose(); stage3d = null; } use3d = false;
       },
     };

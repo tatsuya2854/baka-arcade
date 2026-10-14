@@ -1,4 +1,26 @@
 import { CFG } from './config';
+import { loadImg, drawCover } from '../../core/images';
+
+// 生成画像(無ければ null → 従来の Canvas 描画にフォールバック)
+const SLUG = 'usb-insert';
+const IM: { bg: HTMLImageElement | null; hero: HTMLImageElement | null; item: HTMLImageElement | null } = { bg: null, hero: null, item: null };
+let imPromise: Promise<void> | null = null;
+export function preloadUsbImages(): Promise<void> {
+  imPromise ??= Promise.all([loadImg(SLUG, 'bg'), loadImg(SLUG, 'hero'), loadImg(SLUG, 'item')]).then(([bg, hero, item]) => { IM.bg = bg; IM.hero = hero; IM.item = item; bgCache = null; });
+  return imPromise;
+}
+export const releaseUsbCaches = () => { bgCache = null; };
+// item.png(1024x1024)上のUSBポート開口の中心と幅(px) / hero.png 上のコネクタ前面の中心と幅、先端が上を向くための回転
+const IT_CX = 515, IT_CY = 527, IT_PW = 282;
+const HE_CX = 171, HE_CY = 700, HE_PW = 214, HE_ROT = 1.943;
+let bgCache: { cv: HTMLCanvasElement; key: string } | null = null;
+function bgFor(g: CanvasRenderingContext2D, w: number, h: number): HTMLCanvasElement {
+  const sc = Math.round(Math.max(1, Math.min(2, g.getTransform().a)) * 2) / 2, key = `${Math.round(w)}x${Math.round(h)}|${sc}`;
+  if (bgCache?.key === key) return bgCache.cv;
+  const cv = document.createElement('canvas'); cv.width = Math.ceil(w * sc); cv.height = Math.ceil(h * sc);
+  const c = cv.getContext('2d')!; c.scale(sc, sc); drawCover(c, IM.bg!, w, h, 1, 0.5); // 右寄せ: 背景の画面端ノートPCを外し、ランプ側を残す
+  bgCache = { cv, key }; return cv;
+}
 
 export interface Scratch { x: number; y: number; a: number; l: number }
 export interface SceneState {
@@ -51,6 +73,8 @@ export function drawSparks(g: CanvasRenderingContext2D, px: number, py: number, 
 export function drawScene(g: CanvasRenderingContext2D, w: number, h: number, S: SceneState) {
   const m = mmOf(w, h, S.zoom), cx = w / 2 + S.shx, cy = h * S.cy + S.shy;
   g.save();
+  if (IM.bg) g.drawImage(bgFor(g, w, h), 0, 0, w, h);
+  else {
   // 筐体パネル
   g.fillStyle = lin(g, 0, 0, w, h, [[0, '#33373e'], [0.5, '#1c1f24'], [1, '#2a2d33']]); g.fillRect(-20, -20, w + 40, h + 40);
   g.globalAlpha = 0.9; g.fillStyle = g.createPattern(getBrushed(), 'repeat')!; g.fillRect(-20, -20, w + 40, h + 40); g.globalAlpha = 1;
@@ -59,12 +83,18 @@ export function drawScene(g: CanvasRenderingContext2D, w: number, h: number, S: 
     g.fillStyle = 'rgba(255,255,255,0.14)'; g.fillRect(-20, dy, w + 40, 1.5);
     g.fillStyle = lin(g, 0, dy - 14, 0, dy, [[0, 'rgba(0,0,0,0)'], [1, 'rgba(0,0,0,0.35)']]); g.fillRect(-20, dy - 14, w + 40, 14);
   }
+  }
+  if (!IM.bg) {
   // USB マーク(刻印)
   g.save(); g.translate(cx, cy - 5.4 * m); g.strokeStyle = 'rgba(255,255,255,0.13)'; g.fillStyle = 'rgba(255,255,255,0.13)'; g.lineWidth = 0.16 * m;
   g.beginPath(); g.moveTo(-2.2 * m, 0); g.lineTo(2.4 * m, 0); g.moveTo(-0.6 * m, 0); g.lineTo(0.2 * m, -0.7 * m); g.lineTo(1 * m, -0.7 * m); g.moveTo(0.4 * m, 0); g.lineTo(1.1 * m, 0.7 * m); g.stroke();
   g.beginPath(); g.arc(-2.5 * m, 0, 0.32 * m, 0, 7); g.fill(); g.beginPath(); g.moveTo(2.4 * m, -0.4 * m); g.lineTo(3 * m, 0); g.lineTo(2.4 * m, 0.4 * m); g.fill(); g.restore();
 
+  }
   // ---- ポート ----
+  if (IM.item) { // 実写のノートPC側面。ポート開口を既存の判定位置(cx,cy)に合わせる
+    const f = CFG.portW * m / IT_PW; g.drawImage(IM.item, cx - IT_CX * f, cy - IT_CY * f, 1024 * f, 1024 * f);
+  } else {
   const PW = CFG.portW * m, PH = CFG.portH * m, x0 = cx - PW / 2, y0 = cy - PH / 2;
   rr(g, x0 - 0.9 * m, y0 - 0.9 * m, PW + 1.8 * m, PH + 1.8 * m, 1.4 * m); g.fillStyle = lin(g, 0, y0 - m, 0, y0 + PH + m, [[0, '#6b7078'], [1, '#1b1d21']]); g.fill();
   rr(g, x0 - 0.35 * m, y0 - 0.35 * m, PW + 0.7 * m, PH + 0.7 * m, 1 * m); g.fillStyle = lin(g, 0, y0, 0, y0 + PH, [[0, '#17191d'], [1, '#4d525a']]); g.fill();
@@ -85,6 +115,7 @@ export function drawScene(g: CanvasRenderingContext2D, w: number, h: number, S: 
   }
   g.restore();
   rr(g, x0, y0, PW, PH, 0.5 * m); g.strokeStyle = 'rgba(0,0,0,0.7)'; g.lineWidth = 1; g.stroke();
+  }
   // 接触傷
   g.save(); g.lineCap = 'round';
   for (const s of S.scratches) {
@@ -104,6 +135,13 @@ export function drawScene(g: CanvasRenderingContext2D, w: number, h: number, S: 
   // 影(ライトと逆方向へ。高いほど離れてぼける)
   { const zz = Math.max(0, S.z), dxl = S.x - S.lx, dyl = S.y - S.ly, dl = Math.hypot(dxl, dyl) + 6, ox = dxl / dl * zz * 0.5 * m, oy = dyl / dl * zz * 0.35 * m + zz * 0.15 * m;
     for (let i = 0; i < 3; i++) { const e = i * (0.15 + zz * 0.05) * m; g.fillStyle = `rgba(0,0,0,${0.16 / (1 + zz * 0.15)})`; rr(g, px - CFG.plugW / 2 * m + ox - e, py - CFG.plugH / 2 * m + oy - e, CFG.plugW * m + e * 2, CFG.plugH * m + e * 2, 0.7 * m); g.fill(); } }
+  if (IM.hero) { // 実写のUSBメモリ。先端を上に向け、反転は長軸まわりの回転(横幅の伸縮+左右反転)で表現
+    const f = CFG.plugW * m / HE_PW * 0.8, sx = Math.cos(Math.PI * S.flipT), pb = CFG.portH * m;
+    g.save();
+    if (S.insert > 0.25) { g.beginPath(); g.rect(-20, cy - pb * 0.2, w + 40, h); g.clip(); } // ポートに入った先端は見えない
+    g.translate(px, py - S.insert * 0.4 * m); g.rotate(S.rot); g.scale(s * (Math.abs(sx) < 0.04 ? 0.04 * Math.sign(sx || 1) : sx), s);
+    g.rotate(HE_ROT); g.drawImage(IM.hero, -HE_CX * f, -HE_CY * f, 1024 * f, 1024 * f); g.restore();
+  } else {
   g.save(); g.translate(px, py);
   // 本体(奥側: 手前に傾けた視点で見える背面プレート)
   g.save(); g.rotate(S.rot); g.scale(s, s);
@@ -134,6 +172,7 @@ export function drawScene(g: CanvasRenderingContext2D, w: number, h: number, S: 
   }
   g.fillStyle = 'rgba(255,255,255,0.35)'; g.fillRect(-W / 2 + 0.7 * m, -H / 2 + 0.12 * m, W - 1.4 * m, 0.12 * m);
   g.restore();
+  }
   // 火花
   if (S.sparkAge >= 0) drawSparks(g, cx + Math.max(-5.5, Math.min(5.5, S.x)) * m, cy + Math.max(-2.4, Math.min(2.4, S.y)) * m, m, S.sparkAge, S.sparkN);
   // 暗がり(ライト)

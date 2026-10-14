@@ -10,7 +10,7 @@ export interface FaceP {
   W: number; H: number; hx: number; hy: number; rx: number; ry: number; nr: number; nx: number; ny: number; time: number;
   expr: number; pull: number; stretch: number; red: number; happy: boolean; tears: boolean; sweat: boolean; tilt: number;
   ox: number; oy: number; zoom: number; lookX: number; flick: number;
-  hairKind: number; // 0なし 1つまむ 2戻る/切れ(先端位置のみ)
+  noHand?: boolean; hairKind: number; // 0なし 1つまむ 2戻る/切れ(先端位置のみ)
   tipX: number; tipY: number; amp: number; waves: number; hand: boolean;
   fly: number; flyX: number; flyY: number; flyRot: number; // 0なし 1抜けた毛+手 2切れた毛片
 }
@@ -82,9 +82,10 @@ export class NoseStage3D {
     canvas.addEventListener('webglcontextlost', this.onLost);
     this.camera = new PerspectiveCamera(20, 1, 10, 6000);
     this.grad = new DataTexture(new Uint8Array([110, 190, 255]), 3, 1, RedFormat); this.grad.minFilter = this.grad.magFilter = NearestFilter; this.grad.needsUpdate = true;
-    this.scene.add(new AmbientLight(0xffffff, 1.5));
-    const dl = new DirectionalLight(0xffffff, 2.2); dl.position.set(-0.6, 0.8, 1); this.scene.add(dl);
-    const rim = new DirectionalLight(0xffd9a0, 0.7); rim.position.set(0.9, 0.1, 0.5); this.scene.add(rim);
+    // 洗面所の冷たい白色光（上から）に合わせる
+    this.scene.add(new AmbientLight(0xeaf2ff, 1.45));
+    const dl = new DirectionalLight(0xf4f8ff, 2.2); dl.position.set(-0.3, 1.1, 1); this.scene.add(dl);
+    const rim = new DirectionalLight(0xcfe0ff, 0.6); rim.position.set(0.9, 0.3, 0.5); this.scene.add(rim);
     this.scene.add(this.rootG); this.rootG.add(this.head);
     this.skinM = this.toon(SKIN); this.noseM = this.toon(NOSE);
     this.build();
@@ -215,7 +216,7 @@ export class NoseStage3D {
         cl[i * 3] = rX + (tx - rX) * f + w; cl[i * 3 + 1] = rY + (ty - rY) * f; cl[i * 3 + 2] = rZ + f * 40;
       }
       this.hair.commit(3); this.hair.mesh.visible = true;
-      if (p.hairKind === 1 && p.hand) {
+      if (p.hairKind === 1 && p.hand && !p.noHand) {
         this.hand.visible = true; this.hand.position.set(tx, ty, rZ + 60);
         this.palmH.position.set(0, -18, 0); this.palmH.scale.set(22, 34, 20);
         this.fingL.position.set(-14, 6, 6); this.fingL.scale.set(9, 20, 9); this.fingL.rotation.z = 0.3;
@@ -228,7 +229,7 @@ export class NoseStage3D {
       const cl = this.fly.cl;
       if (p.fly === 1) {
         for (let i = 0; i <= 20; i++) { cl[i * 3] = Math.sin(i * 0.8 + time * 8) * 8; cl[i * 3 + 1] = -i * 10; cl[i * 3 + 2] = 0; }
-        this.flyPalm.visible = true; this.flyPalm.position.set(0, 10, 0); this.flyPalm.scale.set(24, 32, 20);
+        this.flyPalm.visible = !p.noHand; this.flyPalm.position.set(0, 10, 0); this.flyPalm.scale.set(24, 32, 20);
       } else {
         for (let i = 0; i <= 20; i++) { cl[i * 3] = Math.sin(i * 0.8) * 7; cl[i * 3 + 1] = -i * 7.2; cl[i * 3 + 2] = 0; }
         this.flyPalm.visible = false;

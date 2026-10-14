@@ -1,7 +1,7 @@
 // ハゲを守れ！ の3D描画層（Three.js）。物理は index.ts の2Dのまま、描画だけを担当。
 // uncle3d.ts の UncleKit/Uncle3D を再利用し、髪(verlet各節)・押さえる手・舞う髪を自前で追加する。
 import {
-  AmbientLight, CylinderGeometry, DirectionalLight, Group, Material, Mesh, MeshBasicMaterial, MeshToonMaterial, PerspectiveCamera,
+  AmbientLight, CylinderGeometry, DirectionalLight, Group, Material, Mesh, MeshBasicMaterial, MeshStandardMaterial, MeshToonMaterial, PerspectiveCamera,
   Scene, SphereGeometry, Vector3, WebGLRenderer,
 } from 'three';
 import type { Expr } from '../../core/characters';
@@ -31,6 +31,7 @@ export class Hair3D {
   private thumb: Mesh; private thumbO: Mesh;
   private matA: MeshToonMaterial; private matB: MeshToonMaterial; private hairRed = false;
   private onLost: (e: Event) => void;
+  private toonA!: MeshToonMaterial; private toonB!: MeshToonMaterial; private photo = false; private amb!: AmbientLight; private dl!: DirectionalLight; private rim!: DirectionalLight; private photoMat: MeshStandardMaterial[] = [];
   private v = new Vector3(); private D = 1000; private cw = 390; private ch = 844;
 
   constructor(onLost?: () => void) {
@@ -41,15 +42,15 @@ export class Hair3D {
     canvas.addEventListener('webglcontextlost', this.onLost);
     this.kit = new UncleKit();
     this.scene.add(this.world);
-    this.scene.add(new AmbientLight(0xffffff, 1.5));
-    const dl = new DirectionalLight(0xffffff, 2.4); dl.position.set(-0.6, 0.9, 1); this.scene.add(dl);
-    const rim = new DirectionalLight(0x9fb8ff, 0.8); rim.position.set(0.8, 0.2, 0.6); this.scene.add(rim);
+    this.amb = new AmbientLight(0xffffff, 1.5); this.scene.add(this.amb);
+    this.dl = new DirectionalLight(0xffffff, 2.4); this.dl.position.set(-0.6, 0.9, 1); this.scene.add(this.dl);
+    this.rim = new DirectionalLight(0x9fb8ff, 0.8); this.rim.position.set(0.8, 0.2, 0.6); this.scene.add(this.rim);
     // おじさん（頭の髪キャップは非表示=ハゲ）
     this.uncle = new Uncle3D(this.kit, 'normal', 'skin_normal');
     this.uncle.group.traverse((o) => { if ((o as Mesh).isMesh && (o as Mesh).geometry === this.kit.hairGeo) o.visible = false; });
     this.world.add(this.uncle.group);
     // 髪（節ごとの円柱 + 関節の球）
-    this.matA = this.kit.toon('#3b2a20'); this.matB = this.kit.toon('#7a2a1a');
+    this.matA = this.kit.toon('#3b2a20'); this.matB = this.kit.toon('#7a2a1a'); this.toonA = this.matA; this.toonB = this.matB;
     for (let i = 0; i < NODE_MAX; i++) {
       const s = new Mesh(this.cyl, this.matA); s.visible = false; this.segs.push(s); this.world.add(s);
       const j = new Mesh(this.sph, this.matA); j.visible = false; this.joints.push(j); this.world.add(j);
@@ -69,6 +70,28 @@ export class Hair3D {
     for (let f = -2; f <= 1; f++) part(0.19, 0.5, 0.22, f * 0.4 + 0.2, 0.6);
     const [tm, to] = part(0.5, 0.2, 0.22, 0, 0.1); this.thumb = tm; this.thumbO = to;
     this.hand.add(this.handOutline); this.world.add(this.hand);
+  }
+
+  /** 実写の頭部画像を2D側で描くモード: 3Dのおじさん・手を隠し、髪を写真の照明(暗い背景+冷たい逆光)になじませる。 */
+  setPhoto(on: boolean) {
+    if (on === this.photo) return; this.photo = on;
+    this.uncle.group.visible = !on; this.hand.visible = !on;
+    if (on) {
+      this.amb.color.set(0xb8c8e8); this.amb.intensity = 0.7;
+      this.dl.color.set(0xf2f6ff); this.dl.intensity = 2.6; this.dl.position.set(-0.5, 0.9, 1);
+      this.rim.color.set(0x9fc0ff); this.rim.intensity = 2.2; this.rim.position.set(0.9, 0.5, -0.4);
+      if (!this.photoMat.length) {
+        for (const c of ['#1a120d', '#6a2418']) { const m = new MeshStandardMaterial({ color: c, roughness: 0.3, metalness: 0.1 }); this.photoMat.push(m); }
+      }
+      this.matA = this.photoMat[0] as unknown as MeshToonMaterial; this.matB = this.photoMat[1] as unknown as MeshToonMaterial;
+    } else {
+      this.matA = this.toonA; this.matB = this.toonB;
+      this.amb.color.set(0xffffff); this.amb.intensity = 1.5; this.dl.color.set(0xffffff); this.dl.intensity = 2.4; this.dl.position.set(-0.6, 0.9, 1);
+      this.rim.color.set(0x9fb8ff); this.rim.intensity = 0.8; this.rim.position.set(0.8, 0.2, 0.6);
+    }
+    const m = this.hairRed ? this.matB : this.matA;
+    for (let i = 0; i < NODE_MAX; i++) { this.segs[i].material = m; this.joints[i].material = m; }
+    for (const f of this.fly) f.material = this.matA;
   }
 
   resize(cw: number, ch: number, dpr: number) {
@@ -102,12 +125,12 @@ export class Hair3D {
     for (let i = 0; i < NODE_MAX; i++) {
       const s = this.segs[i], j = this.joints[i];
       if (i >= n) { s.visible = false; j.visible = false; continue; }
-      const k = i / (n - 1), r = 4.4 - 2.4 * k, zi = h * (0.03 + k * 0.2);
+      const k = i / (n - 1), th = this.photo ? 0.55 : 1, r = (4.4 - 2.4 * k) * th, zi = h * (0.03 + k * 0.2);
       const a = f.nodes[i];
       j.visible = true; j.position.set(wx(a.x), wy(a.y), zi); j.scale.set(r, r, r);
       if (i < n - 1) {
         const b = f.nodes[i + 1], dx = b.x - a.x, dy = -(b.y - a.y), len = Math.hypot(dx, dy) || 1e-3, zb = h * (0.03 + (i + 1) / (n - 1) * 0.2);
-        const rr = 4.4 - 2.4 * ((i + 0.5) / (n - 1));
+        const rr = (4.4 - 2.4 * ((i + 0.5) / (n - 1))) * th;
         s.visible = true; s.position.set(wx((a.x + b.x) / 2), wy((a.y + b.y) / 2), (zi + zb) / 2);
         s.rotation.set(0, 0, Math.atan2(dy, dx) - Math.PI / 2); s.scale.set(rr, len, rr);
       } else s.visible = false;
@@ -128,7 +151,7 @@ export class Hair3D {
     this.hand.position.set(wx(hd.x), wy(hd.y), h * 0.42);
     this.hand.rotation.set(-0.35 * hd.t, 0, -hd.dir * (0.25 - hd.t * 0.25));
     this.hand.scale.set(sz, sz, sz);
-    this.handOutline.visible = ho;
+    this.handOutline.visible = ho; this.hand.visible = !this.photo;
     this.handMat.opacity = 0.55 + hd.t * 0.45;
     const hurt = Math.min(1, f.dmg);
     this.handMat.color.setRGB(246 / 255, (201 - hurt * 90 - f.fatigue * 20) / 255, (160 - hurt * 90) / 255);
@@ -141,7 +164,7 @@ export class Hair3D {
     this.canvas.removeEventListener('webglcontextlost', this.onLost);
     this.world.clear(); this.kit.dispose();
     this.cyl.dispose(); this.sph.dispose();
-    for (const m of [this.flushMat, this.handMat] as Material[]) m.dispose();
+    for (const m of [this.flushMat, this.handMat, ...this.photoMat] as Material[]) m.dispose();
     this.renderer.dispose(); this.renderer.forceContextLoss(); this.canvas.remove();
   }
 }

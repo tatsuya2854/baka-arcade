@@ -21,3 +21,12 @@ export function loadImg(slug: string, id: string): Promise<HTMLImageElement | nu
 }
 /** 未生成の枠に出す、仮画像であることを明示するパネル。 */
 export const placeholder = (label: string) => `<div class="ph"><span>画像未生成</span><i>${label}</i></div>`;
+/** 背景を画面いっぱいに cover で描く（画像の縦横比を保つ）。fx/fy は切り抜きの基準位置(0..1)。 */
+export function drawCover(g: CanvasRenderingContext2D, img: CanvasImageSource & { width: number; height: number }, w: number, h: number, fx = 0.5, fy = 0.5) {
+  const s = Math.max(w / img.width, h / img.height), dw = img.width * s, dh = img.height * s;
+  g.drawImage(img, (w - dw) * fx, (h - dh) * fy, dw, dh);
+}
+/** 画像を中心(cx,cy)に、高さ h で描く（縦横比を保つ）。回転 rot ラジアン。 */
+export function drawSprite(g: CanvasRenderingContext2D, img: CanvasImageSource & { width: number; height: number }, cx: number, cy: number, h: number, rot = 0, flip = false) {
+  const w = img.width / img.height * h; g.save(); g.translate(cx, cy); g.rotate(rot); if (flip) g.scale(-1, 1); g.drawImage(img, -w / 2, -h / 2, w, h); g.restore();
+}

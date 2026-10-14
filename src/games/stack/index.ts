@@ -2,6 +2,7 @@ import { Engine, Bodies, Body, Composite, Events, Sleeping } from 'matter-js';
 import type { GameModule, GameContext, ResultArt } from '../../core/types';
 import { drawUncle, drawBubble, TYPE_DIM, type UncleType, type Expr } from '../../core/characters';
 import { Stage3D } from '../../core/uncle3d';
+import { loadImg } from '../../core/images';
 import { meta } from './meta';
 import { CFG, lerp } from './config';
 
@@ -23,24 +24,87 @@ interface View { x0: number; x1: number; top: number; bottom: number }
 interface Frame { plat: number; over: boolean; ids: number[]; d: Float32Array }
 let uid = 1;
 
+
+// ---------- 生成画像（読み込めなければ従来描画にフォールバック） ----------
+const SLUG = 'ojisan-stack';
+const BEAM = 1023 / 1536;        // bg画像内の鉄骨ビームの中心位置(縦比率)
+interface Spr { c: HTMLCanvasElement; aspect: number }
+let BGI: HTMLImageElement | null = null;
+let SP: { hero: Spr; item: Spr; gold: Spr } | null = null;
+/** 白抜き画像の不透明部分だけを切り出し、軽量サイズ・夕陽色の色味にして返す。 */
+function prepSprite(img: HTMLImageElement, gold = false): Spr {
+  const q = 160, k = q / Math.max(img.width, img.height), sw = Math.max(1, Math.round(img.width * k)), sh = Math.max(1, Math.round(img.height * k));
+  const sm = document.createElement('canvas'); sm.width = sw; sm.height = sh;
+  const sg = sm.getContext('2d', { willReadFrequently: true })!; sg.drawImage(img, 0, 0, sw, sh);
+  const d = sg.getImageData(0, 0, sw, sh).data; let x0 = sw, y0 = sh, x1 = 0, y1 = 0;
+  for (let y = 0; y < sh; y++) for (let x = 0; x < sw; x++) if (d[(y * sw + x) * 4 + 3] > 40) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  if (x1 <= x0 || y1 <= y0) { x0 = 0; y0 = 0; x1 = sw - 1; y1 = sh - 1; }
+  const bx = x0 / k, by = y0 / k, bw = (x1 - x0 + 1) / k, bh = (y1 - y0 + 1) / k, H = 300, W = Math.max(8, Math.round(bw / bh * H));
+  const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d')!;
+  g.drawImage(img, bx, by, bw, bh, 0, 0, W, H);
+  g.globalCompositeOperation = 'source-atop';
+  g.fillStyle = gold ? 'rgba(255,196,40,0.5)' : 'rgba(255,150,70,0.16)'; g.fillRect(0, 0, W, H);   // 夕陽の色味
+  const lg = g.createLinearGradient(0, 0, W, 0); lg.addColorStop(0, 'rgba(255,200,130,0.18)'); lg.addColorStop(0.5, 'rgba(255,200,130,0)'); lg.addColorStop(1, 'rgba(20,10,40,0.22)');
+  g.fillStyle = lg; g.fillRect(0, 0, W, H);                                                       // 左から陽が当たる
+  return { c, aspect: W / H };
+}
+async function loadAssets() {
+  if (BGI || SP) return;
+  const [bg, hero, item] = await Promise.all([loadImg(SLUG, 'bg'), loadImg(SLUG, 'hero'), loadImg(SLUG, 'item')]);
+  BGI = bg;
+  if (hero && item) SP = { hero: prepSprite(hero), item: prepSprite(item), gold: prepSprite(hero, true) };
+}
+/** bg画像を、ビームの中心が縦位置 gy に来るよう描く（足りない上下は端の行を引き伸ばす）。 */
+function drawBgAt(g: CanvasRenderingContext2D, w: number, h: number, gy: number) {
+  const im = BGI!, iw = im.width, ih = im.height;
+  const s = Math.max(w / iw, h / ih, gy / (BEAM * ih)), dw = iw * s, dh = ih * s, x = (w - dw) / 2, y = gy - BEAM * dh;
+  if (y > 0) g.drawImage(im, 0, 0, iw, 2, x, 0, dw, y + 1);
+  if (y + dh < h) g.drawImage(im, 0, ih - 2, iw, 2, x, y + dh - 1, dw, h - y - dh + 1);
+  g.drawImage(im, x, y, dw, dh);
+  const tg = g.createLinearGradient(0, 0, 0, h); tg.addColorStop(0, 'rgba(20,8,40,0.5)'); tg.addColorStop(0.28, 'rgba(20,8,40,0)'); tg.addColorStop(1, 'rgba(20,8,40,0.18)');
+  g.fillStyle = tg; g.fillRect(0, 0, w, h);
+}
+function drawPlat(g: CanvasRenderingContext2D, pw: number, th: number) {
+  if (!BGI) {
+    const sg = g.createLinearGradient(0, 0, 0, th); sg.addColorStop(0, '#ffb35a'); sg.addColorStop(0.2, '#ff7a3d'); sg.addColorStop(1, '#a8341f');
+    g.fillStyle = sg; g.beginPath(); g.roundRect(-pw / 2, 0, pw, th, 10); g.fill(); return;
+  }
+  const sg = g.createLinearGradient(0, 0, 0, th); sg.addColorStop(0, '#e9d3b4'); sg.addColorStop(0.12, '#a39a92'); sg.addColorStop(0.6, '#6c6f76'); sg.addColorStop(1, '#3d4047');
+  g.fillStyle = sg; g.beginPath(); g.roundRect(-pw / 2, 0, pw, th, 6); g.fill();
+  g.fillStyle = 'rgba(255,236,200,0.55)'; g.fillRect(-pw / 2 + 6, 2, pw - 12, 3);
+  g.fillStyle = 'rgba(30,30,40,0.55)'; for (let x = -pw / 2 + 14; x < pw / 2 - 8; x += 40) { g.beginPath(); g.arc(x, th * 0.55, 3.2, 0, 7); g.fill(); }
+}
+/** 写真のおじさんを描く（中心(0,0)・全高 h）。flail は慌て具合(0..1)。 */
+function drawFigure(g: CanvasRenderingContext2D, type: UncleType, h: number, flail: number, t: number, seed: number) {
+  const s = !SP ? null : type === 'special' ? SP.gold : (type === 'fat' || type === 'muscle' || type === 'giant') ? SP.item : SP.hero;
+  if (!s) return;
+  const hh = h * 0.98, nat = hh * s.aspect, w = Math.max(nat, Math.min(TYPE_DIM[type].w * h * 0.95, nat * 1.4));
+  if (flail > 0.05) g.rotate(Math.sin(t * 11 + seed) * 0.09 * flail);
+  g.drawImage(s.c, -w / 2, -hh / 2, w, hh);
+}
+
 function sceneBg(g: CanvasRenderingContext2D, w: number, h: number, seed = 1) {
+  if (BGI) return;
   const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#120830'); gr.addColorStop(0.55, '#3a1568'); gr.addColorStop(1, '#8a2a7a');
   g.fillStyle = gr; g.fillRect(0, 0, w, h);
   g.fillStyle = '#fff'; for (let i = 0; i < 50; i++) { const x = ((i * 9301 + seed * 49297) % 233280) / 233280 * w, y = ((i * 7919 + 13) % 1000) / 1000 * h * 0.8; g.globalAlpha = 0.3 + (i % 5) * 0.12; g.fillRect(x, y, 1 + i % 3, 1 + i % 3); }
   g.globalAlpha = 1;
 }
-function drawScene(g: CanvasRenderingContext2D, w: number, h: number, items: Item[], v: View, o: { plat: number; over: boolean; t: number; platOn?: boolean }) {
+function drawScene(g: CanvasRenderingContext2D, w: number, h: number, items: Item[], v: View, o: { plat: number; over: boolean; t: number; platOn?: boolean; oy?: number; fh?: number }) {
   const sc = Math.min(w / (v.x1 - v.x0), h / (v.bottom - v.top));
-  g.save(); g.translate(w / 2 - (v.x0 + v.x1) / 2 * sc, (h - (v.bottom - v.top) * sc) / 2 - v.top * sc); g.scale(sc, sc);
+  const oy = o.oy ?? 0;
+  if (BGI) drawBgAt(g, w, o.fh ?? h, oy + (h - (v.bottom - v.top) * sc) / 2 - v.top * sc + o.plat * sc + CFG.platformThick * sc * 0.5);
+  g.save(); g.translate(0, oy); g.translate(w / 2 - (v.x0 + v.x1) / 2 * sc, (h - (v.bottom - v.top) * sc) / 2 - v.top * sc); g.scale(sc, sc);
   const pw = CFG.platformW, th = CFG.platformThick;
   g.save(); g.translate(0, o.plat);
-  if (!o.over) { g.fillStyle = '#6a3a9a'; g.fillRect(-36, th, 72, 2000); }
-  const sg = g.createLinearGradient(0, 0, 0, th); sg.addColorStop(0, '#ffb35a'); sg.addColorStop(0.2, '#ff7a3d'); sg.addColorStop(1, '#a8341f');
-  g.fillStyle = sg; g.beginPath(); g.roundRect(-pw / 2, 0, pw, th, 10); g.fill(); g.restore();
+  if (!o.over && !BGI) { g.fillStyle = '#6a3a9a'; g.fillRect(-36, th, 72, 2000); }
+  drawPlat(g, pw, th); g.restore();
   items.forEach((it, i) => {
     const e: Expr = o.over ? (i % 2 ? 'cry' : 'dead') : (i % 3 === 0 ? 'scared' : 'sweat');
     g.save(); g.translate(it.x + Math.sin(it.a) * 0.025 * it.h, it.y - Math.cos(it.a) * 0.025 * it.h); g.rotate(it.a + (o.over ? 0 : Math.sin(o.t * 3 + i) * 0.008));
-    drawUncle(g, { x: 0, y: 0, h: it.h, type: it.type, skin: it.skin, expr: e, flail: o.over ? 1 : 0.2, t: o.t + it.seed, seed: it.seed }); g.restore();
+    if (SP) drawFigure(g, it.type, it.h, o.over ? 1 : 0.2, o.t + it.seed, it.seed);
+    else drawUncle(g, { x: 0, y: 0, h: it.h, type: it.type, skin: it.skin, expr: e, flail: o.over ? 1 : 0.2, t: o.t + it.seed, seed: it.seed });
+    g.restore();
   });
   g.restore();
 }
@@ -77,13 +141,19 @@ function start(ctx: GameContext) {
   // 3D描画（WebGL）。失敗したら従来の2D描画のまま。重ね順: 背景2D → three → 前景2D(canvas: 演出+HUD)
   let stage: Stage3D | null = null, bgCanvas: HTMLCanvasElement | null = null, gBg: CanvasRenderingContext2D | null = null, use3d = false;
   function disable3d() { use3d = false; if (bgCanvas) bgCanvas.style.display = 'none'; if (stage) stage.canvas.style.display = 'none'; g = gTop; }
-  try {
-    stage = new Stage3D(() => disable3d());
-    bgCanvas = document.createElement('canvas'); bgCanvas.style.cssText = canvas.style.cssText; gBg = bgCanvas.getContext('2d');
-    stage.canvas.style.cssText = canvas.style.cssText + ';pointer-events:none';
-    if (!gBg) throw new Error('2d');
-    root.append(bgCanvas, stage.canvas, canvas); use3d = true;
-  } catch { try { stage?.dispose(); } catch { /* ignore */ } stage = null; bgCanvas = null; gBg = null; use3d = false; root.appendChild(canvas); }
+  // 生成画像が読めた場合は 2D のみで描く（写真スプライト＋背景画像）。読めない場合だけ従来の3D/2D。
+  function setupLayers() {
+    if (SP) { root.appendChild(canvas); return; }
+    try {
+      stage = new Stage3D(() => disable3d());
+      bgCanvas = document.createElement('canvas'); bgCanvas.style.cssText = canvas.style.cssText; gBg = bgCanvas.getContext('2d');
+      stage.canvas.style.cssText = canvas.style.cssText + ';pointer-events:none';
+      if (!gBg) throw new Error('2d');
+      root.append(bgCanvas, stage.canvas, canvas); use3d = true;
+    } catch { try { stage?.dispose(); } catch { /* ignore */ } stage = null; bgCanvas = null; gBg = null; use3d = false; root.appendChild(canvas); }
+  }
+  let ready = false;
+  root.appendChild(canvas);
   let shX = 0, shY = 0;
 
   // ---------- 物理 ----------
@@ -198,7 +268,7 @@ function start(ctx: GameContext) {
 
   // ---------- 入力 ----------
   function onTap() {
-    if (finished) return;
+    if (finished || !ready) return;
     if (!startedFlag) {
       startedFlag = true; startMs = performance.now(); tutorial = false;
       audio.unlock(); ctx.started(); audio.startBgm(0, 150);
@@ -330,7 +400,7 @@ function start(ctx: GameContext) {
       ],
       draw(g, w, h, t) {
         sceneBg(g, w, h, final);
-        const hh = h * 0.62; g.save(); g.translate(0, h * 0.2); drawScene(g, w, hh, items, view, { plat: 0, over: false, t, platOn: true }); g.restore();
+        const hh = h * 0.62; drawScene(g, w, hh, items, view, { plat: 0, over: false, t, platOn: true, oy: h * 0.2, fh: h });
         const u = Math.min(w, h * 1.1) / 400;
         outlined(g, `高さ ${meters}m ／ ${cause}`, w / 2, h * 0.9, Math.max(12, 20 * u + 4), '#fff', 5);
         outlined(g, '崩壊！', w * 0.78, h * 0.14, Math.max(14, 28 * u + 6), '#ff5a5a', 6);
@@ -497,7 +567,16 @@ function start(ctx: GameContext) {
     return s.length ? s.reduce((a, u) => a + u.body.position.x, 0) / s.length : 0;
   }
 
+  let bgCache: HTMLCanvasElement | null = null;
+  function buildBgCache() {
+    if (!BGI) return;
+    if (!bgCache) bgCache = document.createElement('canvas');
+    bgCache.width = Math.round(cw * dpr); bgCache.height = Math.round(ch * dpr);
+    const c = bgCache.getContext('2d')!; c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawBgAt(c, cw, ch, Math.max(hy() + 220, ch - 100) + CFG.platformThick * 0.5 * k * 0.9);
+  }
   function drawBg() {
+    if (BGI && bgCache) { g.drawImage(bgCache, 0, 0, cw, ch); return; }
     const gr = g.createLinearGradient(0, 0, 0, ch);
     gr.addColorStop(0, '#120830'); gr.addColorStop(0.55, '#3a1568'); gr.addColorStop(1, '#8a2a7a');
     g.fillStyle = gr; g.fillRect(0, 0, cw, ch);
@@ -516,7 +595,7 @@ function start(ctx: GameContext) {
   function drawWorld(pass: 0 | 1 | 2 = 0) {
     const sc = k * zoom, gScreen = hy() + (0 - holderY) * sc;
     // 街のシルエット（地面基準）
-    if (pass !== 2) {
+    if (pass !== 2 && !BGI) {
     g.save();
     g.translate(cw / 2, gScreen); g.scale(sc * 0.8, sc * 0.8);
     for (const b of city) {
@@ -535,6 +614,10 @@ function start(ctx: GameContext) {
     const pw = CFG.platformW, th = CFG.platformThick;
     if (pass === 0) {
     g.save(); g.translate(0, platFall.y); g.rotate(platFall.rot);
+    if (BGI) {
+      g.fillStyle = 'rgba(20,10,30,0.28)'; g.beginPath(); g.ellipse(pw * 0.1, th + 6, pw * 0.62, 9, 0, 0, 7); g.fill();   // 接地影（陽は左→影は右）
+      drawPlat(g, pw, th);
+    } else {
     if (phase !== 'over') { // 柱
       const pg = g.createLinearGradient(-40, 0, 40, 0); pg.addColorStop(0, '#5a2f8a'); pg.addColorStop(0.5, '#8a52c0'); pg.addColorStop(1, '#4a2578');
       g.fillStyle = pg; g.fillRect(-36, th, 72, 4000);
@@ -544,6 +627,7 @@ function start(ctx: GameContext) {
     g.fillStyle = 'rgba(255,255,255,0.35)'; g.fillRect(-pw / 2 + 8, 3, pw - 16, 4);
     g.fillStyle = 'rgba(0,0,0,0.25)';
     for (let x = -pw / 2 + 16; x < pw / 2 - 20; x += 36) { g.beginPath(); g.moveTo(x, th - 3); g.lineTo(x + 14, th - 3); g.lineTo(x + 28, 12); g.lineTo(x + 14, 12); g.closePath(); g.fill(); }
+    }
     g.restore();
     }
 
@@ -575,7 +659,8 @@ function start(ctx: GameContext) {
         g.strokeStyle = '#ccc'; g.lineWidth = 3; g.beginPath(); g.moveTo(hx, top); g.lineTo(hx, holderY - h * 0.5); g.stroke();
         g.fillStyle = '#ffd93d'; g.fillRect(hx - 9, top - 5, 18, 10);
         if (pass === 0) { g.save(); g.translate(hx, holderY); g.scale(s, s);
-        drawUncle(g, { x: 0, y: 0, h, rot: Math.cos(ph * 1.7) * 0.14, type: holder.type, skin: holder.skin, expr: holder.type === 'giant' ? 'angry' : 'happy', t, flail: 0.25, seed: 3 });
+        if (SP) { g.rotate(Math.cos(ph * 1.7) * 0.14); drawFigure(g, holder.type, h, 0.25, t, 3); }
+        else drawUncle(g, { x: 0, y: 0, h, rot: Math.cos(ph * 1.7) * 0.14, type: holder.type, skin: holder.skin, expr: holder.type === 'giant' ? 'angry' : 'happy', t, flail: 0.25, seed: 3 });
         g.restore(); }
       }
     }
@@ -623,7 +708,8 @@ function start(ctx: GameContext) {
     exprFor(u, rank); const expr = exprR, flail = flailR;
     const sq = u.impact * 0.14;
     g.save(); g.translate(px, py); g.rotate(b.angle); g.scale(1 + sq, 1 - sq);
-    drawUncle(g, { x: 0, y: 0, h, type: u.type, skin: u.skin, expr, flail, t: t + u.seed, seed: u.seed });
+    if (SP) drawFigure(g, u.type, h, flail, t + u.seed, u.seed);
+    else drawUncle(g, { x: 0, y: 0, h, type: u.type, skin: u.skin, expr, flail, t: t + u.seed, seed: u.seed });
     g.restore();
   }
 
@@ -709,6 +795,7 @@ function start(ctx: GameContext) {
     if (bgCanvas) { bgCanvas.width = canvas.width; bgCanvas.height = canvas.height; }
     stage?.resize(cw, ch, dpr);
     k = Math.min(cw / 400, ch / 760);
+    buildBgCache();
   }
   resize();
   const ro = new ResizeObserver(resize); ro.observe(root);
@@ -723,6 +810,7 @@ function start(ctx: GameContext) {
   newHolder(false);
 
   let destroyed = false;
+  let rafStarted = false;
   function loop(now: number) {
     if (destroyed) return;
     raf = requestAnimationFrame(loop);
@@ -733,23 +821,28 @@ function start(ctx: GameContext) {
     if (acc > STEP * 5) acc = 0;
     render();
   }
-  raf = requestAnimationFrame(loop);
+  // 画像を先読みしてから開始（読み込み中は入力を受け付けない）。失敗(null)でも従来描画で進行。
+  loadAssets().catch(() => { /* フォールバック */ }).then(() => {
+    if (destroyed) return;
+    setupLayers(); resize(); ready = true; rafStarted = true; last = 0;
+    raf = requestAnimationFrame(loop);
+  });
 
   if (location.pathname.includes('dev')) {
     (window as any).__stack = {
       get phase() { return phase; }, get lives() { return lives; }, get score() { return score(); },
-      get hx() { return holderX(); }, get tc() { return towerCenter(); }, tap: onTap, get holder() { return holder.type; }, get use3d() { return use3d; },
+      get hx() { return holderX(); }, get tc() { return towerCenter(); }, tap: onTap, get holder() { return holder.type; }, get use3d() { return use3d; }, get sprites() { return !!SP; }, get ready() { return ready; },
       get bodies() { return uncles.map(u => ({ x: u.body.position.x, y: u.body.position.y, a: u.body.angle, vx: u.body.velocity.x, vy: u.body.velocity.y, sleeping: u.body.isSleeping, landed: u.landed, lost: u.lost, type: u.type })); },
     };
   }
 
   return {
     destroy() {
-      destroyed = true; cancelAnimationFrame(raf); clearTimeout(finishTimer);
+      destroyed = true; void rafStarted; cancelAnimationFrame(raf); clearTimeout(finishTimer);
       canvas.removeEventListener('pointerdown', onPointer);
       removeEventListener('keydown', onKey); removeEventListener('resize', resize); ro.disconnect();
       Events.off(engine, 'collisionStart'); Composite.clear(world, false); Engine.clear(engine);
-      audio.stopBgm(); canvas.remove(); bgCanvas?.remove();
+      audio.stopBgm(); canvas.remove(); bgCanvas?.remove(); bgCache = null;
       if (stage) { stage.dispose(); stage = null; } use3d = false;
       if ((window as any).__stack) delete (window as any).__stack;
     },

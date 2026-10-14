@@ -2,7 +2,7 @@ import type { GameContext, GameModule } from '../../core/types';
 import { haptic } from '../../core/haptic';
 import { meta } from './meta';
 import { REVEAL_SEC, ROUNDS, SETTLE_SEC, STAGES, TRANS_SEC, fmtCm, roundScore } from './config';
-import { drawScene, newScene } from './draw';
+import { drawScene, newScene, loadToothpasteImgs, releaseBg } from './draw';
 import { newSim, resume, settled, step, type Sim } from './sim';
 import { buildArt, sampleOf, judge, type RoundRes, type Sample } from './art';
 
@@ -191,11 +191,13 @@ const mod: GameModule = {
         drawScene(g, W, H, sc, clock);
       }
     };
-    raf = requestAnimationFrame(loop);
+    // 画像を先読みしてから開始(読めなければ旧描画)。読み込み中は描かない
+    let dead = false;
+    loadToothpasteImgs().then(() => { if (dead) return; last = performance.now(); raf = requestAnimationFrame(loop); });
 
     return {
       destroy() {
-        cancelAnimationFrame(raf);
+        dead = true; cancelAnimationFrame(raf); releaseBg();
         squeezeStop();
         canvas.removeEventListener('pointerdown', pd);
         canvas.removeEventListener('pointerup', pu);

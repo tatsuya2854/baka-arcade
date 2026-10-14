@@ -1,13 +1,32 @@
 // 目玉焼きの世界の描画（ゲーム本編・リプレイ・結果アート・開始デモで共有）。すべて Canvas2D。
 import { C } from './config';
+import { loadImg } from '../../core/images';
 
-export interface Geom { cx: number; cy: number; s: number; k: number }
+// 生成画像(無ければ null → 従来の Canvas 描画にフォールバック)
+const SLUG = 'egg-landing';
+const IM: { bg: HTMLImageElement | null; hero: HTMLImageElement | null; item: HTMLImageElement | null } = { bg: null, hero: null, item: null };
+let imPromise: Promise<void> | null = null;
+/** 開始前に先読み。失敗しても resolve する */
+export function preloadEggImages(): Promise<void> {
+  imPromise ??= Promise.all([loadImg(SLUG, 'bg'), loadImg(SLUG, 'hero'), loadImg(SLUG, 'item')]).then(([bg, hero, item]) => { IM.bg = bg; IM.hero = hero; IM.item = item; bgCache.clear(); });
+  return imPromise;
+}
+// bg.png(1024x1536)上のフライパン底の中心と半径(px)
+const BG_W = 1024, BG_H = 1536, PAN_PX = 515, PAN_PY = 670, PAN_RPX = 345, BG_K = 0.94;
+
+export interface Geom { cx: number; cy: number; s: number; k: number; kz?: number }
 /** ゲーム/リプレイ用: やや斜め上から見たフライパン。k=縦つぶし率 */
-export const geomFor = (w: number, h: number): Geom => ({ cx: w / 2, cy: h * 0.6, s: Math.min(w / 318, h / 640), k: 0.55 });
+export const geomFor = (w: number, h: number): Geom => {
+  if (IM.bg) { // 背景画像を上端揃えで置き、フライパンの位置に座標系を合わせる(真上からの視点)。足りない下側は鏡像で延長
+    const sc = Math.max(w / BG_W, Math.min(Math.max(w / BG_W, h / BG_H), w / 350 * C.PAN_R / PAN_RPX)), ox = (w - BG_W * sc) / 2;
+    return { cx: ox + PAN_PX * sc, cy: PAN_PY * sc, s: PAN_RPX * sc / C.PAN_R, k: BG_K, kz: 0.5 };
+  }
+  return { cx: w / 2, cy: h * 0.6, s: Math.min(w / 318, h / 640), k: 0.55 };
+};
 const KZ = 0.83;
 const TAU = Math.PI * 2;
 const px = (gm: Geom, X: number) => gm.cx + X * gm.s;
-const py = (gm: Geom, Y: number, z = 0) => gm.cy + Y * gm.s * gm.k - z * gm.s * KZ;
+const py = (gm: Geom, Y: number, z = 0) => gm.cy + Y * gm.s * gm.k - z * gm.s * (gm.kz ?? KZ);
 const clamp = (v: number, a = 0, b = 1) => Math.max(a, Math.min(b, v));
 const el = (c: CanvasRenderingContext2D, x: number, y: number, rx: number, ry: number, rot = 0) => { c.beginPath(); c.ellipse(x, y, Math.max(0.01, rx), Math.max(0.01, ry), rot, 0, TAU); };
 
@@ -42,7 +61,7 @@ const spreadP = (ts: number) => 1 - Math.exp(-ts * 2.6);
 const bgCache = new Map<string, HTMLCanvasElement>();
 function bgFor(g: CanvasRenderingContext2D, w: number, h: number, gm: Geom): HTMLCanvasElement {
   const sc = Math.round(Math.max(1, Math.min(2, g.getTransform().a)) * 2) / 2;
-  const key = `${Math.round(w)}x${Math.round(h)}|${gm.k}|${Math.round(gm.cx)},${Math.round(gm.cy)},${gm.s.toFixed(2)}|${sc}`;
+  const key = `${IM.bg ? 'i' : 'p'}${Math.round(w)}x${Math.round(h)}|${gm.k}|${Math.round(gm.cx)},${Math.round(gm.cy)},${gm.s.toFixed(2)}|${sc}`;
   let cv = bgCache.get(key);
   if (!cv) {
     if (bgCache.size >= 4) { const k0 = bgCache.keys().next().value; if (k0 !== undefined) bgCache.delete(k0); }
@@ -53,7 +72,25 @@ function bgFor(g: CanvasRenderingContext2D, w: number, h: number, gm: Geom): HTM
 }
 export const releaseEggCaches = () => { bgCache.clear(); puff = null; };
 
+function paintImgBg(c: CanvasRenderingContext2D, img: HTMLImageElement, w: number, h: number, gm: Geom) {
+  const { cx, cy, s, k } = gm, R = C.PAN_R;
+  c.fillStyle = '#1a1612'; c.fillRect(0, 0, w, h);
+  const sx = R * s / PAN_RPX, sy = sx * k / BG_K;
+  const x0 = cx - PAN_PX * sx, y0 = cy - PAN_PY * sy, ih = BG_H * sy, iw = BG_W * sx;
+  // 画像が足りない上下は反転コピーで延長(木のカウンターが続いて見える)
+  for (let i = Math.min(0, -Math.ceil(y0 / ih)); i <= Math.max(0, Math.ceil((h - y0) / ih) - 1); i++) {
+    const top = y0 + ih * i; if (top > h || top + ih < 0) continue;
+    if (i % 2) { c.save(); c.translate(0, top + ih); c.scale(1, -1); c.drawImage(img, x0, 0, iw, ih); c.restore(); } else c.drawImage(img, x0, top, iw, ih);
+  }
+  if (y0 + ih < h) { const g2 = c.createLinearGradient(0, y0 + ih - 40 * sy, 0, y0 + ih + 70 * sy); g2.addColorStop(0, 'rgba(14,9,5,0)'); g2.addColorStop(1, 'rgba(14,9,5,.9)'); c.fillStyle = g2; c.fillRect(0, y0 + ih - 40 * sy, w, h); }
+  // ゲーム要素が見やすいよう薄く暗幕(周辺を少し落とす)
+  const gr = c.createRadialGradient(cx, cy, R * s * 0.7, cx, cy, Math.max(w, h) * 0.8); gr.addColorStop(0, 'rgba(8,6,4,0)'); gr.addColorStop(1, 'rgba(8,6,4,.35)');
+  c.fillStyle = gr; c.fillRect(0, 0, w, h);
+  c.strokeStyle = 'rgba(255,255,255,.2)'; c.lineWidth = 1.2; el(c, cx, cy, 7 * s, 7 * s * k); c.stroke();
+  c.fillStyle = 'rgba(255,255,255,.45)'; el(c, cx, cy, 1.3 * s, 1.3 * s * k); c.fill();
+}
 function paintBg(c: CanvasRenderingContext2D, w: number, h: number, gm: Geom) {
+  if (IM.bg) { paintImgBg(c, IM.bg, w, h, gm); return; }
   const { cx, cy, s, k } = gm, R = C.PAN_R;
   // カウンター(ダークな石天板)
   let gr = c.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#1d1b1a'); gr.addColorStop(0.55, '#262321'); gr.addColorStop(1, '#171514');
@@ -131,13 +168,17 @@ function shellPath(c: CanvasRenderingContext2D, a: number, b: number) {
   c.bezierCurveTo(a * 0.75, -b, a, -b * 0.15, a, b * 0.25); c.bezierCurveTo(a, b * 0.75, a * 0.55, b, 0, b);
   c.bezierCurveTo(-a * 0.55, b, -a, b * 0.75, -a, b * 0.25); c.bezierCurveTo(-a, -b * 0.15, -a * 0.75, -b, 0, -b); c.closePath();
 }
-function drawShell(g: CanvasRenderingContext2D, x: number, y: number, u: number, rot: number, half = 0) {
+function drawShell(g: CanvasRenderingContext2D, x: number, y: number, u: number, rot: number, half = 0, stretch = 1) {
+  if (IM.hero && !half) { // 実写の卵。落下速度で縦に伸ばす(体積保存)
+    const hh = 2 * C.EGG_B * u / 0.68, ww = hh * IM.hero.width / IM.hero.height;
+    g.save(); g.translate(x, y); g.rotate(rot); g.scale(1 / Math.sqrt(stretch), stretch); g.drawImage(IM.hero, -ww / 2, -hh / 2, ww, hh); g.restore(); return;
+  }
   g.save(); g.translate(x, y); g.rotate(rot); g.scale(u, u);
   const A = C.EGG_A, B = C.EGG_B;
   shellPath(g, A, B);
   if (half) { g.save(); g.clip(); }
   const gr = g.createRadialGradient(-A * 0.4, -B * 0.4, 1, 0, 0, B * 1.45);
-  gr.addColorStop(0, '#fffaf0'); gr.addColorStop(0.5, '#f0e2c8'); gr.addColorStop(1, '#b9a07a');
+  if (IM.hero) { gr.addColorStop(0, '#d9a070'); gr.addColorStop(0.5, '#bf7f4a'); gr.addColorStop(1, '#8a5530'); } else { gr.addColorStop(0, '#fffaf0'); gr.addColorStop(0.5, '#f0e2c8'); gr.addColorStop(1, '#b9a07a'); }
   g.fillStyle = gr; g.fill();
   if (half) { g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(-A, half > 0 ? -B * 0.1 : -B, A * 2, B * 1.1); g.restore(); shellPath(g, A, B); }
   g.strokeStyle = 'rgba(110,80,40,.35)'; g.lineWidth = 0.8; g.stroke();
@@ -197,13 +238,20 @@ export function drawLanded(g: CanvasRenderingContext2D, dr: Drop, ts: number, gm
   const A = 0.5 + 0.5 * clamp(ts / 1.2);
   const gr = g.createRadialGradient(x0, y0, 0, x0, y0, wr);
   gr.addColorStop(0, `rgba(255,254,248,${A})`); gr.addColorStop(0.65, `rgba(248,244,230,${A})`); gr.addColorStop(1, `rgba(224,210,176,${A * 0.92})`);
-  g.save(); g.shadowColor = 'rgba(0,0,0,.5)'; g.shadowBlur = 9 * s; g.shadowOffsetY = 3 * s * gm.k; g.fillStyle = gr; fillShape(g); g.fill(); g.restore();
-  g.strokeStyle = `rgba(206,150,68,${0.55 * cook})`; g.lineWidth = 2 * s; fillShape(g); g.stroke();
+  if (IM.item) { g.save(); g.translate(2.5 * s, 3.5 * s * gm.k); g.fillStyle = 'rgba(0,0,0,.38)'; fillShape(g); g.fill(); g.restore(); }
+  else { g.save(); g.shadowColor = 'rgba(0,0,0,.5)'; g.shadowBlur = 9 * s; g.shadowOffsetY = 3 * s * gm.k; g.fillStyle = gr; fillShape(g); g.fill(); g.restore(); }
+  if (IM.item) { // 実写の目玉焼きを白身の輪郭でクリップ(広がり・揺れは既存ロジックのまま)
+    const f = dr.Wf * (0.34 + 0.66 * p) * (1 + 0.045 * Math.exp(-ts * 3.2) * Math.sin(ts * 15)), iw = 2 * f * s / 0.87, ih = iw * gm.k;
+    g.save(); g.globalAlpha = alpha * clamp(0.35 + ts * 3); g.drawImage(IM.item, x0 - iw * 0.514, y0 - ih * 0.5, iw, ih); g.restore();
+  }
+  if (!IM.item) { g.strokeStyle = `rgba(206,150,68,${0.55 * cook})`; g.lineWidth = 2 * s; fillShape(g); g.stroke(); }
+  if (!IM.item) {
   g.save(); g.translate(0, -0.9 * s * gm.k); g.strokeStyle = `rgba(255,255,255,${0.35 * A})`; g.lineWidth = 0.9 * s; fillShape(g); g.stroke(); g.restore();
   g.fillStyle = 'rgba(255,255,255,.22)'; el(g, px(gm, dr.X - dr.Wf * 0.42), py(gm, dr.Y - dr.Wf * 0.32), dr.Wf * 0.2 * s * p, dr.Wf * 0.1 * s * p * (0.4 + gm.k), -0.4); g.fill();
+  }
   // 黄身
   const yx = px(gm, dr.X + dr.yx), yy = py(gm, dr.Y + dr.yy);
-  if (dr.burst) {
+  if (IM.item && !dr.burst) { /* 黄身は画像に含まれる */ } else if (dr.burst) {
     const rb = C.YOLK_R * (1 + 0.85 * p) * s;
     const blob = (rad: number, col0: string, col1: string, al: number) => {
       for (let i = 0; i < NP; i++) { const th = (i / NP) * TAU; const f = 1 + 0.26 * Math.cos(2 * th + dr.ph[0]) + 0.18 * Math.cos(3 * th + dr.ph[1]) + 0.1 * Math.cos(5 * th + dr.ph[2]); PX[i] = yx + Math.cos(th) * rad * f; PY[i] = yy + Math.sin(th) * rad * f * (0.4 + 0.6 * gm.k); }
@@ -260,7 +308,7 @@ export function drawScene(g: CanvasRenderingContext2D, w: number, h: number, tim
     if (ts < 0.45) { const amp = Math.min(8, impactSpeed(dr) / 180) * (s / 1.3) * (dr.burst ? 1.4 : 1), e = Math.exp(-ts * 11); g.translate(Math.sin(ts * 75) * amp * e, Math.cos(ts * 58) * amp * 0.7 * e); }
   }
   g.drawImage(bgFor(g, w, h, gm), 0, 0, w, h);
-  drawGlints(g, gm, time);
+  if (!IM.bg) drawGlints(g, gm, time);
   if (S.ghost) drawLanded(g, S.ghost.drop, S.ghost.tau - S.ghost.drop.tFall, gm, S.ghost.alpha, time);
   const shadow = (X: number, Y: number, z: number) => {
     const a = 0.5 * clamp(1 - z / 480), r = (C.EGG_A * 1.15 + z * 0.03) * s;
@@ -275,7 +323,7 @@ export function drawScene(g: CanvasRenderingContext2D, w: number, h: number, tim
       shadow(o.X, o.Y, o.z + dz);
       const ex = px(gm, o.X), ey = py(gm, o.Y, o.z + C.EGG_B);
       const holding = !dr || tau < 0, rot = holding ? Math.sin(time * 3) * 0.05 : (dr!.rot0 + t0 * 2.2);
-      drawShell(g, ex, ey, s, rot);
+      drawShell(g, ex, ey, s, rot, 0, dr && tau > 0 ? 1 + Math.min(0.1, C.G * t0 / 9000) : 1);
       if (dr) {
         const hx = px(gm, dr.X), hy = py(gm, dr.Y, dr.z0 + C.EGG_B), ph = clamp(t0 / 0.14), lift = clamp((t0 - 0.12) / 0.6) ** 2 * 260;
         drawHand(g, hx, hy, s, ph, lift, 1 - clamp((t0 - 0.35) / 0.3));

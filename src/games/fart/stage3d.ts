@@ -38,8 +38,8 @@ export class Fart3D {
     this.kit = new UncleKit();
     this.camera = new PerspectiveCamera(18, 1, 10, 6000);
     this.scene.add(new AmbientLight(0xffffff, 1.5));
-    const dl = new DirectionalLight(0xffffff, 2.4); dl.position.set(-0.6, 0.9, 1); this.scene.add(dl);
-    const rim = new DirectionalLight(0x9fb8ff, 0.8); rim.position.set(0.8, 0.2, 0.6); this.scene.add(rim);
+    const dl = new DirectionalLight(0xffffff, 2.4); dl.position.set(0.6, 0.9, 1); this.scene.add(dl);
+    const rim = new DirectionalLight(0x9fb8ff, 0.8); rim.position.set(-0.8, 0.2, 0.6); this.scene.add(rim);
     const G = <T extends BufferGeometry>(g: T) => { this.geos.push(g); return g; };
     this.sph = G(new SphereGeometry(1, 16, 12)); this.box = G(new BoxGeometry(1, 1, 1)); this.cone = G(new ConeGeometry(1, 1, 12));
     this.cyl = G(new CylinderGeometry(1, 1, 1, 10)); this.ico = G(new IcosahedronGeometry(1, 0)); this.tor = G(new TorusGeometry(1, 0.25, 6, 12, Math.PI));
@@ -84,11 +84,13 @@ export class Fart3D {
   }
 
   /** 主人公。h=ワールドpx。 */
-  player(x: number, y: number, h: number, rot: number, expr: Expr, flail: number, t: number, jp: number, yaw: number, pitch: number, visible: boolean) {
-    const u = this.uncle; u.group.visible = visible;
-    u.pose(this.kit, expr, flail, t, 1);
-    u.place(this.X(x), this.Y(y), 0, rot, h * this.S, -0.16 * jp, yaw);
-    u.group.rotation.x = pitch;
+  player(x: number, y: number, h: number, rot: number, expr: Expr, flail: number, t: number, jp: number, yaw: number, pitch: number, visible: boolean, showUncle = true) {
+    const u = this.uncle; u.group.visible = visible && showUncle;
+    if (showUncle) {
+      u.pose(this.kit, expr, flail, t, 1);
+      u.place(this.X(x), this.Y(y), 0, rot, h * this.S, -0.16 * jp, yaw);
+      u.group.rotation.x = pitch;
+    }
     // 噴射炎：おじさんの尻の下
     const f = this.flameG; f.visible = visible && jp > 0;
     if (f.visible) {

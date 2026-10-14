@@ -2,7 +2,7 @@ import type { GameModule, GameContext, GameInstance } from '../../core/types';
 import { haptic } from '../../core/haptic';
 import { meta } from './meta';
 import { C, FONT } from './config';
-import { type Drop, makeDrop, drawScene, geomFor, eggScreen, impactSpeed, releaseEggCaches } from './scene';
+import { type Drop, makeDrop, drawScene, geomFor, eggScreen, impactSpeed, releaseEggCaches, preloadEggImages } from './scene';
 import { buildArt } from './art';
 
 const TAU = Math.PI * 2;
@@ -145,7 +145,8 @@ function start(ctx: GameContext): GameInstance {
     }
     if (drops.length) text(`平均 ${Math.round(drops.reduce((a, d) => a + d.score, 0) / drops.length)}点`, W / 2, Math.max(28, H * 0.045) + 24, 14, 'rgba(255,255,255,.75)', 1, false);
   }
-  raf = requestAnimationFrame(frame);
+  // 画像の先読みが終わってからループ開始(失敗時は従来描画)
+  preloadEggImages().then(() => { if (alive) { t0 = performance.now(); raf = requestAnimationFrame(frame); } });
 
   return {
     destroy() {

@@ -4,7 +4,7 @@ import { haptic } from '../../core/haptic';
 import { meta } from './meta';
 import { CFG } from './config';
 import { Sim, newSnap, type Snap } from './sim';
-import { drawScene, layout } from './render';
+import { drawScene, layout, ensureImgs } from './render';
 import { makeArt, pickTitle, type Info } from './art';
 
 /** 紙の擦れる音（ノイズ + バンドパス）。連続音 + 単発のくしゃ音 */
@@ -136,7 +136,11 @@ const mod: GameModule = {
       drawScene(g, W, H, snap, snap.time, { hud: true, pop, timeFrac: sim.phase === 'ready' || sim.phase === 'pull' ? 1 - elapsed / CFG.timeLimit : 0 });
       if (sim.done && now - startedAt >= 3200) doFinish();
     };
-    raf = requestAnimationFrame((t) => { last = t; frame(t); });
+    // 画像を先読みしてから開始（失敗/遅延は2.5秒で打ち切り旧描画へ）
+    Promise.race([ensureImgs(), new Promise<void>(r => setTimeout(r, 2500))]).then(() => {
+      if (destroyed) return; initAt = performance.now();
+      raf = requestAnimationFrame((t) => { last = t; frame(t); });
+    });
 
     return {
       destroy() {

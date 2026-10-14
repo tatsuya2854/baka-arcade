@@ -1,10 +1,11 @@
 // 開始画面ループ: ボトルを傾けて皿にケチャップが溜まり、指が長押しする(約2.8秒)
-import { buildBackdrop, drawBottle, drawStream, layoutFor, type Layout } from './scene';
+import { KI, buildBackdrop, drawBottle, drawStream, layoutFor, loadKetchupImgs, type Layout } from './scene';
 
 let cacheKey = '', cacheL: Layout | null = null, cacheBg: HTMLCanvasElement | null = null;
 const FONT = 'sans-serif';
 export const demo = (g: CanvasRenderingContext2D, w: number, h: number, t: number) => {
-  const key = `${Math.round(w)}x${Math.round(h)}`;
+  void loadKetchupImgs();
+  const key = `${Math.round(w)}x${Math.round(h)}${KI.bg ? 'i' : ''}${KI.hero ? 'h' : ''}`;
   if (key !== cacheKey || !cacheL || !cacheBg) { cacheKey = key; cacheL = layoutFor(w, h); cacheBg = buildBackdrop(cacheL, Math.min(2, (typeof window !== 'undefined' && window.devicePixelRatio) || 1)); }
   const L = cacheL, P = 3.2, u = (t % P) / P;
   g.drawImage(cacheBg, 0, 0, w, h);
@@ -15,7 +16,7 @@ export const demo = (g: CanvasRenderingContext2D, w: number, h: number, t: numbe
   const grow = u < 0.12 ? 0 : u < 0.62 ? Math.max(0, (u - 0.22) / 0.4) : 1;
   const R = L.rx * 0.34 * Math.pow(grow, 0.7);
   if (R > 1) {
-    g.save(); g.translate(L.px, L.py + L.ry * 0.02); g.scale(1, 0.6);
+    g.save(); g.translate(L.px, L.py + L.ry * 0.02); g.scale(1, L.ry / L.rx);
     let gr = g.createRadialGradient(-R * 0.25, -R * 0.3, R * 0.05, 0, 0, R); gr.addColorStop(0, '#ff6a55'); gr.addColorStop(0.3, '#d9231f'); gr.addColorStop(0.85, '#8e0d14'); gr.addColorStop(1, '#6a0810');
     g.fillStyle = gr; g.beginPath(); g.arc(0, 0, R, 0, Math.PI * 2); g.fill();
     g.fillStyle = 'rgba(255,255,255,.55)'; g.beginPath(); g.ellipse(-R * 0.3, -R * 0.38, R * 0.22, R * 0.1, -0.5, 0, Math.PI * 2); g.fill();

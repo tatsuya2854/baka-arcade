@@ -7,6 +7,7 @@ import { drawBubble } from '../../core/characters';
 import { load, mutate } from '../../core/storage';
 import { buildArt } from './news';
 import { View3D } from './view3d';
+import { loadImg, drawCover } from '../../core/images';
 
 interface Saved { total: number; found: string[]; ending: boolean }
 interface Part { x: number; y: number; vx: number; vy: number; life: number; max: number; size: number; color: string; grav: number; rect: boolean }
@@ -31,6 +32,10 @@ const mod: GameModule = {
       if (!gBg) throw new Error('2d');
       root.append(bgCanvas, view.canvas, canvas); use3d = true;
     } catch { try { view?.dispose(); } catch { /* ignore */ } view = null; bgCanvas = null; gBg = null; use3d = false; root.appendChild(canvas); }
+    // 生成画像（無い/失敗は null → 旧描画にフォールバック）。先読み完了までループを始めない
+    const imgs: { bg: HTMLImageElement | null; hero: HTMLImageElement | null; item: HTMLImageElement | null } = { bg: null, hero: null, item: null };
+    let destroyed = false, bgImgC: HTMLCanvasElement | null = null, bgImgKey = '';
+    const useImg = () => !!(imgs.hero && imgs.item);
     const raw = (load().extra['button'] ?? {}) as Partial<Saved>;
     const data: Saved = { total: raw.total ?? 0, found: Array.isArray(raw.found) ? raw.found.filter(x => EVENTS.some(e => e.id === x)) : [], ending: !!raw.ending };
     const found = new Set(data.found);
@@ -135,7 +140,7 @@ const mod: GameModule = {
       const a = -lastRot, dx = x - G.W / 2, dy = y - G.H / 2, wx = G.W / 2 + dx * Math.cos(a) - dy * Math.sin(a), wy = G.H / 2 + dx * Math.sin(a) + dy * Math.cos(a);
       for (let i = fxs.length - 1; i >= 0; i--) { const f = fxs[i]; if (f.tap && f.tap(wx, wy)) return; }
       if (fxs.some(f => f.block)) return;
-      if (!m.hide && Math.hypot(wx - G.btn.x, wy - G.btn.y) <= G.btn.r * 1.05) press();
+      if (!m.hide && Math.hypot(wx - G.btn.x, wy - G.btn.y) <= G.btn.r * (useImg() ? 1.3 : 1.05)) press();
     }
     function onKey(e: KeyboardEvent) {
       if (e.code !== 'Space' && e.code !== 'Enter') return; e.preventDefault(); if (finished || e.repeat) return;
@@ -166,18 +171,44 @@ const mod: GameModule = {
     }
 
     function paintBg(W: number, H: number) {
+      if (imgs.bg) {
+        const key = `${W}x${H}@${dpr}`;
+        if (!bgImgC || bgImgKey !== key) {
+          bgImgC ??= document.createElement('canvas'); bgImgC.width = Math.round(W * dpr); bgImgC.height = Math.round(H * dpr); bgImgKey = key;
+          const c = bgImgC.getContext('2d')!; c.setTransform(dpr, 0, 0, dpr, 0, 0); drawCover(c, imgs.bg, W, H, 0.5, 0.5);
+          const dg = c.createLinearGradient(0, 0, 0, H); dg.addColorStop(0, 'rgba(10,12,20,0.55)'); dg.addColorStop(0.3, 'rgba(10,12,20,0.18)'); dg.addColorStop(0.75, 'rgba(10,12,20,0.1)'); dg.addColorStop(1, 'rgba(10,12,20,0.4)');
+          c.fillStyle = dg; c.fillRect(0, 0, W, H);
+        }
+        g.save(); g.translate(W / 2, H / 2); g.rotate(S.rot); const k = 1.06 + Math.abs(S.rot) * 1.3 + S.shake * 0.004; g.scale(k, k); g.drawImage(bgImgC, -W / 2, -H / 2, W, H); g.restore();
+        return;
+      }
       const bg = g.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#16121f'); bg.addColorStop(1, '#2a0d12'); g.fillStyle = bg; g.fillRect(0, 0, W, H);
       g.save(); g.translate(W / 2, H / 2); g.rotate(S.rot); g.translate(-W / 2 + Math.sin(G.time * 57) * S.shake, -H / 2 + Math.cos(G.time * 61) * S.shake);
       g.fillStyle = 'rgba(255,60,60,.05)'; for (let i = 0; i < 6; i++) { g.beginPath(); g.arc(W / 2, H / 2, G.R * (1.6 + i * 0.5 + Math.sin(G.time * 1.5 + i) * 0.05), 0, 7); g.fill(); }
       g.restore();
     }
+    /** ボタン画像（hero=押す前 / item=押下中）。押下・つぶれ・回転・色相(hue)・透明度は既存の演出パラメータで変形 */
+    function drawBtnImg(c: CanvasRenderingContext2D, inRot: boolean) {
+      if (m.hide) return;
+      const R = G.R * m.s, Hs = R * 2.6, pressed = pressAnim > 0.15, img = (pressed ? imgs.item : imgs.hero)!, idle = started ? 1 : 1 + Math.sin(G.time * 4) * 0.03;
+      c.save();
+      if (inRot) { c.translate(G.W / 2, G.H / 2); c.rotate(S.rot); c.translate(-G.W / 2 + Math.sin(G.time * 57) * S.shake, -G.H / 2 + Math.cos(G.time * 61) * S.shake); }
+      c.globalAlpha = Math.max(0, Math.min(1, m.alpha)); c.translate(G.btn.x, G.btn.y); c.rotate(m.rot); c.scale(m.sx * idle, m.sy * idle);
+      const bot = Hs * 0.44;
+      c.save(); c.translate(R * 0.1, bot - Hs * 0.1); c.scale(1, 0.2);
+      const sg = c.createRadialGradient(0, 0, R * 0.2, 0, 0, R * 1.45); sg.addColorStop(0, 'rgba(20,24,34,0.7)'); sg.addColorStop(1, 'rgba(20,24,34,0)');
+      c.fillStyle = sg; c.beginPath(); c.arc(0, 0, R * 1.45, 0, Math.PI * 2); c.fill(); c.restore();
+      if (m.hue) c.filter = `hue-rotate(${m.hue}deg)`;
+      c.drawImage(img, -Hs / 2, bot - (pressed ? 0.83 : 0.97) * Hs, Hs, Hs);
+      c.restore();
+    }
     function draw() {
       const W = G.W, H = G.H;
       if (use3d && view && gBg) {
-        g = gBg; g.setTransform(dpr, 0, 0, dpr, 0, 0); paintBg(W, H);
+        g = gBg; g.setTransform(dpr, 0, 0, dpr, 0, 0); paintBg(W, H); if (useImg()) drawBtnImg(g, true);
         view.beginFrame(-Math.sin(G.time * 57) * S.shake, Math.cos(G.time * 61) * S.shake, S.rot);
         const idle = started ? 1 : 1 + Math.sin(G.time * 4) * 0.03;
-        view.main(G.btn.x, G.btn.y, G.R * m.s, m.sx * idle, m.sy * idle, m.rot, m.hue ?? 0, m.alpha, pressAnim, !m.hide);
+        view.main(G.btn.x, G.btn.y, G.R * m.s, m.sx * idle, m.sy * idle, m.rot, m.hue ?? 0, m.alpha, pressAnim, !m.hide && !useImg());
         for (const f of fxs) f.r3?.(view, Math.min(1, f.t / f.dur));
         view.render();
         g = gTop; g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, canvas.width, canvas.height);
@@ -190,14 +221,15 @@ const mod: GameModule = {
       const ttl = G.time < titleUntil ? titleText : '絶対に押すな';
       txt(g, ttl, W / 2, H * 0.17 + Math.sin(G.time * 3) * 3, Math.min(40, W / (ttl.length * 0.9 + 1)), '#ffe14d', '#300');
       if (!started) txt(g, 'ボタンを押すと60秒スタート', W / 2, H * 0.17 + 40, 15, '#fff');
-      if (is3d && !m.hide && m.label !== null && m.alpha > 0.02 || is3d && !m.hide && m.alpha > 0.02) {
+      if (!is3d && useImg()) drawBtnImg(g, false);
+      if ((is3d || useImg()) && !m.hide && m.alpha > 0.02) {
         const r = G.R * m.s, p3 = Math.max(0, Math.min(1, pressAnim)), depth = 0.3 * p3 * Math.cos((1 - p3) * 6), idle = started ? 1 : 1 + Math.sin(G.time * 4) * 0.03;
         const lab = m.label ?? 'PUSH';
         g.save(); g.globalAlpha = Math.max(0, Math.min(1, m.alpha)); g.translate(G.btn.x, G.btn.y); g.rotate(m.rot); g.scale(m.sx * idle, m.sy * idle);
-        txt(g, lab, 0, -r * (0.26 - depth * 0.5), Math.max(10, r * (lab.length > 3 ? 0.24 : 0.32)), '#fff', 'rgba(90,0,0,.7)'); g.restore();
+        txt(g, lab, 0, useImg() ? (pressAnim > 0.15 ? 0.33 : -0.5) * r : -r * (0.26 - depth * 0.5), Math.max(10, r * (lab.length > 3 ? 0.24 : 0.32)), '#fff', 'rgba(90,0,0,.7)'); g.restore();
       }
       for (const f of fxs) if (f.draw && f.tag !== 'say') f.draw(g, Math.min(1, f.t / f.dur));
-      if (!is3d && !m.hide) {
+      if (!is3d && !m.hide && !useImg()) {
         g.save(); g.globalAlpha = Math.max(0, Math.min(1, m.alpha)); g.translate(G.btn.x, G.btn.y); g.rotate(m.rot);
         const idle = started ? 1 : 1 + Math.sin(G.time * 4) * 0.03; g.scale(m.sx * idle, m.sy * idle);
         drawBtn(g, 0, 0, G.R * m.s, m.hue ?? 0, m.label ?? 'PUSH', pressAnim, true); g.restore();
@@ -226,11 +258,13 @@ const mod: GameModule = {
       });
     }
 
-    raf = requestAnimationFrame(frame);
+    Promise.race([Promise.all([loadImg('dont-press', 'bg'), loadImg('dont-press', 'hero'), loadImg('dont-press', 'item')]), new Promise<null[]>(r => setTimeout(() => r([null, null, null]), 2500))]).then(([b, h, i]) => {
+      if (destroyed) return; imgs.bg = b; imgs.hero = h; imgs.item = i; last = performance.now(); raf = requestAnimationFrame(frame);
+    });
 
     return {
       destroy() {
-        cancelAnimationFrame(raf); window.removeEventListener('keydown', onKey); window.removeEventListener('resize', resize); ro?.disconnect();
+        destroyed = true; cancelAnimationFrame(raf); bgImgC = null; imgs.bg = imgs.hero = imgs.item = null; window.removeEventListener('keydown', onKey); window.removeEventListener('resize', resize); ro?.disconnect();
         canvas.removeEventListener('pointerdown', onDown); audio.stopBgm(); saveNow(); fxs = []; parts = []; canvas.remove(); bgCanvas?.remove();
         if (view) { view.dispose(); view = null; } use3d = false;
       },

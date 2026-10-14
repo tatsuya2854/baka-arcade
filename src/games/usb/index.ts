@@ -1,7 +1,7 @@
 import type { GameModule } from '../../core/types';
 import { meta } from './meta';
 import { CFG } from './config';
-import { drawScene, mmOf, newScene } from './scene';
+import { drawScene, mmOf, newScene, preloadUsbImages, releaseUsbCaches } from './scene';
 import { makeArt, F, type UsbRun } from './art';
 import { makeSound } from './sound';
 import { haptic } from '../../core/haptic';
@@ -140,24 +140,27 @@ const mod: GameModule = {
     };
     const hud = () => {
       g.save(); g.textAlign = 'center'; g.textBaseline = 'middle';
+      // 明るい実写の上でも読めるよう黒縁を付ける
+      const ft = (t: string, x: number, y: number) => { const f = g.fillStyle; g.save(); g.lineJoin = 'round'; g.lineWidth = Math.max(3, parseFloat(/([\d.]+)px/.exec(g.font)?.[1] ?? '16') * 0.18); g.strokeStyle = 'rgba(0,0,0,.7)'; g.strokeText(t, x, y); g.restore(); g.fillStyle = f; g.fillText(t, x, y); };
       const sz = Math.min(W, H);
       if (started) { // 時間バー
         const r = clamp(1 - elapsed / CFG.limitSec, 0, 1); g.fillStyle = 'rgba(255,255,255,0.10)'; g.fillRect(W * 0.06, 14, W * 0.88, 4);
         g.fillStyle = r > 0.3 ? 'rgba(160,150,255,0.85)' : 'rgba(255,100,90,0.9)'; g.fillRect(W * 0.06, 14, W * 0.88 * r, 4);
-        g.font = `900 ${sz * 0.07}px system-ui, sans-serif`; g.textAlign = 'left'; g.fillStyle = 'rgba(255,255,255,0.88)'; g.fillText(`ミス ${fails}`, W * 0.06, 52);
-        g.textAlign = 'right'; g.font = `800 ${sz * 0.045}px ui-monospace, monospace`; g.fillStyle = 'rgba(255,255,255,0.5)'; g.fillText(`${Math.max(0, CFG.limitSec - elapsed).toFixed(1)}s`, W * 0.94, 52);
+        g.font = `900 ${sz * 0.07}px system-ui, sans-serif`; g.textAlign = 'left'; g.fillStyle = 'rgba(255,255,255,0.88)'; ft(`ミス ${fails}`, W * 0.06, 52);
+        g.textAlign = 'right'; g.font = `800 ${sz * 0.045}px ui-monospace, monospace`; g.fillStyle = 'rgba(255,255,255,0.5)'; ft(`${Math.max(0, CFG.limitSec - elapsed).toFixed(1)}s`, W * 0.94, 52);
       }
       g.textAlign = 'center';
-      if (bumpT > 0) { const a = Math.min(1, bumpT * 3), k = 1 + (0.7 - bumpT) * 0.5; g.save(); g.translate(W / 2, 112); g.rotate(-0.06); g.scale(k, k); g.font = `900 ${sz * 0.16}px system-ui, sans-serif`; g.lineWidth = sz * 0.02; g.strokeStyle = `rgba(0,0,0,${0.7 * a})`; g.fillStyle = `rgba(255,86,70,${a})`; g.strokeText(bumpText, 0, 0); g.fillText(bumpText, 0, 0); g.restore(); }
-      if (subT > 0) { g.font = `900 ${sz * 0.055}px system-ui, sans-serif`; g.fillStyle = `rgba(255,255,255,${Math.min(1, subT * 2)})`; g.fillText(subText, W / 2, 112 + sz * 0.15); }
-      if (fails > 0 || started) { g.font = `800 ${sz * 0.036}px system-ui, sans-serif`; g.fillStyle = 'rgba(255,255,255,0.38)'; g.fillText('ドラッグで合わせて離す ／ タップで反転', W / 2, H * 0.955); }
+      if (bumpT > 0) { const a = Math.min(1, bumpT * 3), k = 1 + (0.7 - bumpT) * 0.5; g.save(); g.translate(W / 2, 112); g.rotate(-0.06); g.scale(k, k); g.font = `900 ${sz * 0.16}px system-ui, sans-serif`; g.lineWidth = sz * 0.02; g.strokeStyle = `rgba(0,0,0,${0.7 * a})`; g.fillStyle = `rgba(255,86,70,${a})`; g.strokeText(bumpText, 0, 0); ft(bumpText, 0, 0); g.restore(); }
+      if (subT > 0) { g.font = `900 ${sz * 0.055}px system-ui, sans-serif`; g.fillStyle = `rgba(255,255,255,${Math.min(1, subT * 2)})`; ft(subText, W / 2, 112 + sz * 0.15); }
+      if (fails > 0 || started) { g.font = `800 ${sz * 0.036}px system-ui, sans-serif`; g.fillStyle = 'rgba(255,255,255,0.38)'; ft('ドラッグで合わせて離す ／ タップで反転', W / 2, H * 0.955); }
       if (!started) {
-        g.font = `900 ${sz * 0.075}px system-ui, sans-serif`; g.fillStyle = 'rgba(255,255,255,0.92)'; g.fillText('USBを、一発で挿せ。', W / 2, 96);
-        g.font = `800 ${sz * 0.04}px system-ui, sans-serif`; g.fillStyle = `rgba(255,255,255,${0.45 + 0.3 * Math.sin(now * 4)})`; g.fillText('ドラッグで位置を合わせて、離す。タップで反転。', W / 2, 140);
+        g.font = `900 ${sz * 0.075}px system-ui, sans-serif`; g.fillStyle = 'rgba(255,255,255,0.92)'; ft('USBを、一発で挿せ。', W / 2, 96);
+        g.font = `800 ${sz * 0.04}px system-ui, sans-serif`; g.fillStyle = `rgba(255,255,255,${0.45 + 0.3 * Math.sin(now * 4)})`; ft('ドラッグで位置を合わせて、離す。タップで反転。', W / 2, 140);
       }
       g.restore();
     };
-    raf = requestAnimationFrame(loop);
+    // 画像の先読みが終わってからループ開始(失敗時は従来描画)
+    preloadUsbImages().then(() => { if (!over) { last = performance.now(); raf = requestAnimationFrame(loop); } });
     (window as any).__usb = { S, get state() { return { phase, fails, wrongSide, flipTarget }; }, mm: m, setFlip: (v: number) => { flipTarget = v; }, setFails: (n: number) => { fails = n; } };
 
     return {
@@ -165,7 +168,7 @@ const mod: GameModule = {
         cancelAnimationFrame(raf); over = true;
         removeEventListener('resize', resize); removeEventListener('keydown', key);
         cv.removeEventListener('pointerdown', down); cv.removeEventListener('pointermove', move); cv.removeEventListener('pointerup', up); cv.removeEventListener('pointercancel', up);
-        A.stopBgm(); cv.remove(); delete (window as any).__usb;
+        A.stopBgm(); releaseUsbCaches(); cv.remove(); delete (window as any).__usb;
       },
     };
   },
