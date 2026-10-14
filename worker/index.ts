@@ -137,6 +137,11 @@ export class Arcade extends DurableObject<Env> {
       this.sql.exec('DELETE FROM ch WHERE nickname=?', nick); this.sql.exec('DELETE FROM scores WHERE nickname=?', nick);
       return json({ deleted: n });
     }
+    if (method === 'GET' && path === '/api/percentile') { // 実記録だけで計算。母数が少ない間は null（架空の順位は出さない）
+      const game = q.get('game') ?? '', score = Number(q.get('score')); if (!LIMITS[game] || !Number.isFinite(score)) return json({ error: 'bad' }, 400);
+      const r = this.sql.exec('SELECT COUNT(*) n, SUM(CASE WHEN m >= ? THEN 1 ELSE 0 END) hi FROM (SELECT MAX(score) m FROM scores WHERE game=? GROUP BY uid)', score, game).toArray()[0] as { n: number; hi: number | null };
+      return json({ n: r.n, top: r.n >= 20 ? Math.max(1, Math.round(((r.hi ?? 0) / r.n) * 100)) : null });
+    }
     if (method === 'GET' && path === '/api/rare') { // レア出現率の実測（公開・集計値のみ）
       const game = q.get('game') ?? ''; if (!LIMITS[game]) return json({ error: 'bad game' }, 400);
       const plays = (this.sql.exec('SELECT COALESCE(SUM(n),0) c FROM ev WHERE k=?', `game_over|${game}`).toArray()[0] as { c: number }).c;

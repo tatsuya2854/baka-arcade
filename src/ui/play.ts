@@ -89,6 +89,7 @@ export function renderPlay(app: HTMLElement, id: string, challenge?: Challenge):
       <div class="score">${esc(r.scoreText)}</div>
       ${isBest ? '<div class="new">🎉 自己ベスト更新！</div>' : ''}
       <div class="comment">${esc(art?.comment ?? '')}</div>
+      <div class="chip" id="pct" style="display:none"></div>
       ${beat != null ? `<div class="chip ${beat ? 'bp' : ''}">${beat ? '🏆 挑戦状に勝利！' : `あと ${fmtScore(challenge!.score - r.score)}${m.scoreUnit}…惜しい！`}</div>` : ''}
       <button class="retry" id="retry" disabled>もう一回！</button>
       <div class="shr big"><button id="sp" class="prim">📤 結果を共有</button><button id="sx2">𝕏で投稿</button></div>
@@ -162,6 +163,8 @@ export function renderPlay(app: HTMLElement, id: string, challenge?: Challenge):
       track('video_save', { game: m.id, ext: v.ext }); saveImage(v.blob, `baka-${m.id}.${v.ext}`); msg(`動画(${v.ext})を保存しました`);
     });
     const box = $('#nickbox');
+    // 上位○%: サーバーに記録が20人分以上たまったら実データで表示（それまでは出さない）
+    fetch(`/api/percentile?game=${m.id}&score=${r.score}`).then(x => (x.ok ? x.json() : null)).then((j: { n: number; top: number | null } | null) => { const el = layer.querySelector<HTMLElement>('#pct'); if (el && j?.top != null) { el.style.display = ''; el.textContent = `🌍 上位 ${j.top}%（${j.n}人中）`; } }).catch(() => {});
     const submit = async () => {
       const res = await submitScore(m.id, r.score, r.durationMs);
       if (res.ok && res.cid) cid = res.cid;
