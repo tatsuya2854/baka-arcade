@@ -9,7 +9,7 @@ const LIMITS: Record<string, { maxPerSec: number; maxScore: number }> = {
   stack: { maxPerSec: 1.2, maxScore: 300 }, fart: { maxPerSec: 40, maxScore: 60000 }, hair: { maxPerSec: 1.05, maxScore: 600 },
   nose: { maxPerSec: 130, maxScore: 20000 }, button: { maxPerSec: 3, maxScore: 60 },
 };
-const EVENTS = new Set(['game_start', 'game_over', 'retry', 'game_switch', 'share_click', 'bp_earned', 'character_unlocked', 'visit', 'third_play']);
+const EVENTS = new Set(['game_start', 'game_over', 'retry', 'game_switch', 'share_click', 'bp_earned', 'character_unlocked', 'visit', 'third_play', 'result_view', 'image_save', 'link_copy', 'challenge_create', 'challenge_visit', 'challenge_play', 'video_save']);
 const MIN_PLAY_MS = 3000, SLACK_MS = 2500;
 const JST = 9 * 3600e3;
 const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -37,6 +37,7 @@ export class Arcade extends DurableObject<Env> {
     this.sql.exec(`CREATE TABLE IF NOT EXISTS sessions(sid TEXT PRIMARY KEY, game TEXT, t0 INTEGER, ipk TEXT);
       CREATE TABLE IF NOT EXISTS scores(id INTEGER PRIMARY KEY AUTOINCREMENT, game TEXT, uid TEXT, nickname TEXT, score REAL, at INTEGER);
       CREATE INDEX IF NOT EXISTS sc_g ON scores(game, at);
+      CREATE TABLE IF NOT EXISTS ch(id TEXT PRIMARY KEY, game TEXT, nickname TEXT, score REAL, at INTEGER);
       CREATE TABLE IF NOT EXISTS ev(day TEXT, k TEXT, n INTEGER, PRIMARY KEY(day,k));
       CREATE TABLE IF NOT EXISTS rl(k TEXT PRIMARY KEY, n INTEGER, win INTEGER);`);
   }
@@ -73,7 +74,14 @@ export class Arcade extends DurableObject<Env> {
       this.sql.exec('DELETE FROM scores WHERE at < ?', now - 400 * 864e5);
       const since = dayStart(now);
       const rank = (this.sql.exec('SELECT COUNT(*) c FROM (SELECT uid, MAX(score) m FROM scores WHERE game=? AND at>=? GROUP BY uid) WHERE m > ?', game, since, score).toArray()[0] as { c: number }).c + 1;
-      return json({ ok: true, rank });
+      const cid = crypto.randomUUID().replace(/-/g, '').slice(0, 10);
+      this.sql.exec('INSERT INTO ch VALUES(?,?,?,?,?)', cid, game, nickname, Math.round(score * 10) / 10, now);
+      this.sql.exec('DELETE FROM ch WHERE at < ?', now - 120 * 864e5);
+      return json({ ok: true, rank, cid });
+    }
+    if (method === 'GET' && path === '/api/challenge') {
+      const c = this.sql.exec('SELECT game, nickname nick, score FROM ch WHERE id=?', (q.get('id') ?? '').slice(0, 32)).toArray()[0];
+      return c ? json(c) : json({ error: 'not found' }, 404);
     }
     if (method === 'GET' && path === '/api/ranking') {
       const game = q.get('game') ?? '', period = q.get('period') ?? 'today'; if (!LIMITS[game]) return json({ error: 'bad game' }, 400);
@@ -88,6 +96,7 @@ export class Arcade extends DurableObject<Env> {
         if (!EVENTS.has(e?.ev)) continue;
         const game = typeof e.props?.game === 'string' && LIMITS[e.props.game] ? e.props.game : '';
         const keys = [`${e.ev}|${game}`]; if (first && (e.ev === 'visit' || e.ev === 'third_play')) keys.push(`${e.ev}_new|`);
+        const ref = e.props?.ref; if (ref === 'share' || ref === 'challenge') { keys.push(`${e.ev}@${ref}|${game}`); if (e.props?.returning === true) keys.push(`${e.ev}_returning@${ref}|`); }
         for (const k of keys) this.sql.exec('INSERT INTO ev VALUES(?,?,1) ON CONFLICT(day,k) DO UPDATE SET n=n+1', day, k);
       }
       return json({ ok: true });

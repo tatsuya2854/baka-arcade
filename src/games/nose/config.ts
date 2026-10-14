@@ -76,3 +76,8 @@ export const MIN_PULL = 0.08;
 /** 演出時間(ms) */
 export const REACT_MS = 1100;
 export const BGM = { kind: 3, tempo: 120 };
+
+/** 鼻毛の長さ(cm): 基本 + ステージ*係数 + 離したゲージ*係数。特殊ステージは倍率 */
+export const HAIR = { base: 2, perStage: 0.8, perGauge: 6, specialMult: 14, earthCm: 4000000000 };
+/** 称号の判定に使うしきい値 */
+export const TITLE = { legendPlucked: 10, legendPerfect: 4 };

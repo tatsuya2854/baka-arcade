@@ -1,4 +1,4 @@
-import type { GameModule, GameContext, GameInstance } from '../../core/types';
+import type { GameModule, GameContext, GameInstance, ResultArt } from '../../core/types';
 import { drawUncle, drawBubble, type Expr } from '../../core/characters';
 import { meta } from './meta';
 import { CFG } from './config';
@@ -10,6 +10,39 @@ interface Part { k: PKind; x: number; y: number; vx: number; vy: number; life: n
 
 const clamp = (v: number, a = 0, b = 1) => Math.max(a, Math.min(b, v));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+
+function artDraw(g: CanvasRenderingContext2D, w: number, h: number, t: number, v: string, dir: number, sec: number, mph: number, title: string, byDmg: boolean, ms: number) {
+  const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#173a63'); gr.addColorStop(1, '#2e6f9e'); g.fillStyle = gr; g.fillRect(0, 0, w, h);
+  g.strokeStyle = 'rgba(255,255,255,.4)'; g.lineWidth = Math.max(1, w / 200);
+  for (let i = 0; i < 12; i++) { const y = (i * 0.083 + 0.03) * h, x = ((t * 500 + i * 97) % (w + 200)) - 100, xx = dir > 0 ? x : w - x; g.beginPath(); g.moveTo(xx, y); g.lineTo(xx - dir * w * 0.15, y); g.stroke(); }
+  const hh = Math.min(w * 1.25, h * 0.95), hr = 0.19 * hh, cx = w / 2, hcy = h * 0.5, ry = hcy - hr * 0.95;
+  const expr = v === 'regrow' ? 'happy' : byDmg ? 'angry' : v === 'last' ? 'sweat' : 'cry';
+  drawUncle(g, { x: cx, y: hcy + 0.31 * hh, h: hh, expr, t, bald: true, hairLen: 0, rot: dir * 0.03 });
+  g.lineCap = 'round'; const col = '#3b2a20';
+  const strand = (x0: number, len: number, bend: number, wid: number, lift = 1) => {
+    g.strokeStyle = col; g.lineWidth = wid; g.beginPath(); g.moveTo(x0, ry);
+    g.bezierCurveTo(x0 + bend * 0.3, ry - len * 0.4 * lift, x0 + bend * 0.8, ry - len * 0.6 * lift, x0 + bend, ry - len * 0.6 * lift + len * 0.4 * (1 - lift) + Math.sin(t * 8) * 2); g.stroke();
+  };
+  if (v === 'last') strand(cx, hr * 1.1, Math.sin(t * 4) * hr * 0.1, Math.max(2, hr * 0.05));
+  else if (v === 'sideways') strand(cx, hr * 1.4, dir * hr * 1.3, Math.max(2, hr * 0.05), 0.35);
+  else if (v === 'tangled') {
+    g.strokeStyle = col; g.lineWidth = Math.max(2, hr * 0.045); g.beginPath(); g.moveTo(cx, ry);
+    for (let i = 1; i <= 24; i++) g.lineTo(cx + Math.sin(i * 2.1) * hr * 0.5 + dir * i * 2, ry - Math.abs(Math.sin(i * 1.3)) * hr * 0.3 + Math.cos(i * 2.7) * hr * 0.1); g.stroke();
+    g.fillStyle = 'rgba(255,60,60,.45)'; g.beginPath(); g.ellipse(cx, ry + hr * 0.1, hr * 0.7, hr * 0.3, 0, 0, 7); g.fill();
+  } else if (v === 'flyaway') {
+    g.fillStyle = 'rgba(255,100,100,.5)'; g.beginPath(); g.ellipse(cx, ry + 2, hr * 0.12, hr * 0.06, 0, 0, 7); g.fill();
+    const k = (t * 0.6) % 1;
+    for (let i = 0; i < 7; i++) { const f = i / 7, px = cx + dir * (hr * 0.4 + f * w * 0.4 + k * w * 0.2), py = ry - f * hr * 1.5 - k * hr * 0.5 + Math.sin(t * 5 + i) * hr * 0.15; g.save(); g.translate(px, py); g.rotate(t * 3 + i); g.strokeStyle = col; g.lineWidth = Math.max(2, hr * 0.04); g.beginPath(); g.moveTo(-hr * 0.2, 0); g.quadraticCurveTo(0, hr * 0.12, hr * 0.2, 0); g.stroke(); g.restore(); }
+  } else if (v === 'regrow') {
+    for (let i = -14; i <= 14; i++) { const a = i / 14, x0 = cx + a * hr * 0.9, y0 = hcy - Math.sqrt(Math.max(0, 1 - a * a * 0.8)) * hr * 0.97; g.strokeStyle = col; g.lineWidth = Math.max(2, hr * 0.035); g.beginPath(); g.moveTo(x0, y0); g.quadraticCurveTo(x0 + a * hr * 0.3 + Math.sin(t * 3 + i) * 3, y0 - hr * 0.35, x0 + a * hr * 0.5 + dir * hr * 0.1, y0 - hr * (0.5 + 0.2 * Math.abs(Math.sin(i * 3.1)))); g.stroke(); }
+    g.fillStyle = '#ffe97a'; for (let i = 0; i < 8; i++) { const a = t * 2 + i; g.fillText('✦', cx + Math.cos(a) * hr * 1.5, hcy + Math.sin(a * 1.3) * hr * 1.3); }
+  }
+  g.font = `900 ${Math.round(w * 0.075)}px "Hiragino Sans", sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
+  g.lineWidth = w * 0.014; g.strokeStyle = '#000'; g.fillStyle = '#fff';
+  const lab = `${sec.toFixed(1)}秒 / 風速${mph}m`; g.strokeText(lab, cx, h * 0.07); g.fillText(lab, cx, h * 0.07);
+  g.font = `900 ${Math.round(w * 0.06)}px "Hiragino Sans", sans-serif`; g.fillStyle = '#ff4'; g.strokeText(title, cx, h * 0.93); g.fillText(title, cx, h * 0.93);
+  void ms;
+}
 
 function start(ctx: GameContext): GameInstance {
   const root = ctx.root, audio = ctx.audio;
@@ -41,6 +74,7 @@ function start(ctx: GameContext): GameInstance {
   let shake = 0, flash = 0, zoom = 1;
   let overT = 0, overWhy = '', timeScale = 1, finished = false;
   let wind = 0;
+  let holdTotal = 0, maxWind = 0, maxStress = 0, peakDmg = 0, slaps = 0, nearMiss = 0, danger = false;
   const parts: Part[] = [];
   let hint = '', hintT = 0;
   let raf = 0;
@@ -92,7 +126,7 @@ function start(ctx: GameContext): GameInstance {
       audio.startBgm(CFG.bgmKind, CFG.bgmTempo);
       genGusts(8);
     }
-    if (!want) { want = true; if (relCd <= 0) { dmg += CFG.dmgSlap; audio.sfx('tap'); } }
+    if (!want) { want = true; if (relCd <= 0) { slaps++; dmg += CFG.dmgSlap; audio.sfx('tap'); } }
   };
   const release = () => {
     if (!want) return; want = false;
@@ -135,6 +169,7 @@ function start(ctx: GameContext): GameInstance {
       wind = windAt(t);
       if (Math.abs(wind) > 0.04) lastDir = wind > 0 ? 1 : -1;
       relCd = Math.max(0, relCd - rdt);
+      maxWind = Math.max(maxWind, Math.abs(wind));
       holding = want && relCd <= 0;
       if (holding) { holdDur += rdt; ramp = Math.min(1, ramp + rdt / CFG.pressRamp); }
       else { holdDur = 0; ramp = Math.max(0, ramp - rdt * 8); }
@@ -165,6 +200,9 @@ function start(ctx: GameContext): GameInstance {
       sweatAcc += rdt * Math.max(0, stress - 0.25) * 14;
       while (sweatAcc >= 1) { sweatAcc -= 1; burstSweat(1, -lastDir); }
       if (aw > 0.75 && Math.random() < rdt * 3) burstSweat(5, -wind / aw);
+      if (holding) holdTotal += rdt;
+      maxStress = Math.max(maxStress, stress); peakDmg = Math.max(peakDmg, dmg);
+      if (stress > 0.88) danger = true; else if (danger && stress < 0.4) { danger = false; nearMiss++; }
       if (stress >= 1 || dmg >= 1) gameOver(stress >= 1 ? '抜けた！' : '頭皮が…！');
     }
     // 予兆パーティクル(時間はスローの影響を受ける)
@@ -374,6 +412,42 @@ function start(ctx: GameContext): GameInstance {
   }
   let lastScore = 0;
 
+  function buildArt(sec: number): ResultArt {
+    const byDmg = overWhy.startsWith('頭皮'), ratio = sec > 0 ? holdTotal / sec : 0, mph = Math.round(maxWind * 30);
+    const endWind = wind, dir = endWind >= 0 ? 1 : -1, strong = Math.abs(endWind) > 0.7;
+    let rare: string | undefined;
+    if (sec >= 30 && peakDmg < 0.6 && ratio >= 0.3) rare = 'regrow';
+    else if (sec >= 25 && maxWind >= 0.95) rare = 'windmaster';
+    else if (nearMiss >= 2 && sec >= 15) rare = 'miracle';
+    else if (!byDmg && strong && sec >= 8) rare = 'flyaway';
+    type V = 'last' | 'sideways' | 'tangled' | 'flyaway' | 'regrow';
+    const variant: V = rare === 'regrow' ? 'regrow' : byDmg ? 'tangled' : (rare === 'flyaway' || strong) ? 'flyaway' : sec < 6 ? 'last' : 'sideways';
+    let title: string, comment: string;
+    if (rare === 'regrow') { title = '奇跡の増毛おじさん'; comment = '押さえ続けたら、なぜか毛が増えた。'; }
+    else if (rare === 'windmaster') { title = '風速30mに勝った頭'; comment = '台風級の突風を耐えた伝説の一本。'; }
+    else if (rare === 'miracle') { title = '奇跡の一本毛'; comment = `ぎりぎりを${nearMiss}回くぐり抜けた。`; }
+    else if (rare === 'flyaway') { title = '飛んでいった毛'; comment = '抜けた瞬間は、とても綺麗だった。'; }
+    else if (byDmg && slaps >= 12) { title = '連打で頭皮炎上'; comment = 'ペチペチ叩きすぎです。'; }
+    else if (byDmg && ratio > 0.8) { title = '押さえっぱなしの手'; comment = '守ろうとして、頭皮を壊した。'; }
+    else if (byDmg) { title = '頭皮の拷問官'; comment = '愛が重すぎた。髪より頭皮が先に泣いた。'; }
+    else if (ratio < 0.15) { title = '風まかせの男'; comment = '手を使おう。手は飾りじゃない。'; }
+    else if (sec < 5) { title = '最後の一本を失った男'; comment = '別れは突然やってくる。'; }
+    else if (sec < 12) { title = '毛根の見習い'; comment = '風に負けた。まだ伸びしろはある。'; }
+    else if (sec < 20) { title = '毛根の戦士'; comment = '風と戦える頭になってきた。'; }
+    else if (sec < 30) { title = '風を読む男'; comment = '予兆を見抜いている。'; }
+    else { title = '毛根の守護神'; comment = '最後の一本、まだ誇らしく揺れている。'; }
+    const s1 = sec.toFixed(1);
+    const facts = [
+      { label: '生存秒', value: s1 + '秒' }, { label: '最大風速', value: mph + 'm/s' },
+      { label: '押さえ率', value: Math.round(ratio * 100) + '%' }, { label: '頭皮ダメージ最大', value: Math.round(Math.min(1, peakDmg) * 100) + '%' },
+      { label: '抜け寸前', value: nearMiss + '回' }, { label: '終了原因', value: overWhy },
+    ];
+    const draw = (gg: CanvasRenderingContext2D, w: number, h: number, tt: number) => artDraw(gg, w, h, tt, variant, dir, sec, mph, title, byDmg, maxStress);
+    return { title, comment, facts, rare, draw, postVariants: [
+      `最後の一本を${s1}秒守りました！称号は「${title}」`, `風速${mph}mの突風の中、毛根が${s1}秒がんばった。「${title}」`, `${overWhy} ${s1}秒で散った…「${title}」 #ハゲを守れ`,
+    ] };
+  }
+
   // ---- ループ ----
   let last = performance.now();
   const loop = (now: number) => {
@@ -387,7 +461,7 @@ function start(ctx: GameContext): GameInstance {
         finished = true;
         const s = Math.round(lastScore * 10) / 10;
         const durationMs = Math.round(lastScore * 1000);
-        ctx.finish({ score: s, scoreText: `${s.toFixed(1)}秒`, shareText: `最後の一本を${s.toFixed(1)}秒守りました！`, durationMs, detail: overWhy });
+        ctx.finish({ score: s, scoreText: `${s.toFixed(1)}秒`, shareText: `最後の一本を${s.toFixed(1)}秒守りました！`, durationMs, detail: overWhy, art: buildArt(s) });
       }
     }
     if (phase === 'play') lastScore = t;

@@ -67,3 +67,9 @@ h2::before{content:"";width:6px;height:18px;background:var(--pink);box-shadow:0 
 @keyframes tin{from{transform:translate(-50%,-20px);opacity:0}}
 .link{color:var(--cyan);font-size:13px;text-decoration:underline}
 @media (prefers-reduced-motion:reduce){*{animation:none!important}}
+
+.artcv{border-radius:20px;border:3px solid var(--c);box-shadow:0 0 30px -4px var(--c);background:#0b0a1c;max-width:100%}
+.atitle{font-size:26px;font-weight:900;line-height:1.25;text-shadow:0 0 14px var(--c)}
+.res .score{font-size:44px}.comment{font-size:15px;color:#d9d4ff;line-height:1.5}
+.ptext{width:100%;border-radius:12px;background:#120f26;color:#fff;border:1px solid #ffffff33;padding:10px;font:inherit;font-size:14px;resize:vertical}
+.res{justify-content:flex-start}

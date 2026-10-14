@@ -4,6 +4,7 @@ import { UNLOCKABLES } from '../core/bp';
 import { ACHS } from '../core/achievements';
 import { fetchRanking, type Period } from '../core/ranking';
 import { audio, go } from '../core/shared';
+import { discovered } from '../core/codex';
 import type { GameMeta } from '../core/types';
 
 const esc = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
@@ -50,6 +51,9 @@ export function renderHub(app: HTMLElement) {
   <h2>バカポイントとキャラ解放</h2>
   <div class="muted" style="margin:0 2px 8px">${nextUnlock ? `次の解放「${esc(nextUnlock.name)}」まであと ${Math.max(0, nextUnlock.cost - s.bp)}BP` : '全キャラ解放済み！'}（BPはゲーム内専用・換金不可。1日の獲得上限あり）</div>
   <div class="skins">${UNLOCKABLES.filter(u => u.kind === 'skin').map(u => { const has = s.unlocked.includes(u.id); return `<button class="skin ${has ? '' : 'lock'} ${s.selectedSkin === u.id ? 'on' : ''}" data-skin="${u.id}"><div class="e">${has ? u.emoji : '🔒'}</div><b>${esc(u.name)}</b><div class="muted">${has ? u.desc : u.cost + 'BP'}</div></button>`; }).join('')}</div>
+
+  <h2>レア結果図鑑 <span class="muted">(${Object.keys(discovered()).length}/${ALL_META.reduce((a, m) => a + m.rares.length, 0)})</span></h2>
+  <div class="ach">${ALL_META.flatMap(m => m.rares.map(r => { const n = discovered()[m.id + ":" + r.id]; return `<div class="achi ${n ? "got" : ""}"><b>${n ? "✨ " + esc(r.name) : "❓ ？？？"}</b>${esc(m.emoji)} ${n ? esc(m.title) + " ×" + n : "ヒント：" + esc(r.hint)}</div>`; })).join("")}</div>
 
   <h2>実績・称号</h2>
   <div class="muted" style="margin:0 2px 8px">称号: ${UNLOCKABLES.filter(u => u.kind === 'title' && s.unlocked.includes(u.id)).map(u => esc(u.name.replace('称号：', ''))).join(' / ') || 'まだなし'}</div>

@@ -12,14 +12,14 @@ export async function beginSession(game: string): Promise<void> {
     if (r.ok) session = (await r.json()) as Session;
   } catch { /* オフライン */ }
 }
-export async function submitScore(game: string, score: number, durationMs: number): Promise<{ ok: boolean; rank?: number; reason?: string }> {
+export async function submitScore(game: string, score: number, durationMs: number): Promise<{ ok: boolean; rank?: number; reason?: string; cid?: string }> {
   const s = load();
   if (!session || !s.nickname) return { ok: false, reason: !s.nickname ? 'nickname' : 'offline' };
   try {
     const r = await fetch('/api/score', { method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ game, score, durationMs, nickname: s.nickname, uid: s.uid, ...session }) });
     session = null;
-    return (await r.json()) as { ok: boolean; rank?: number; reason?: string };
+    return (await r.json()) as { ok: boolean; rank?: number; reason?: string; cid?: string };
   } catch { return { ok: false, reason: 'offline' }; }
 }
 export async function fetchRanking(game: string, period: Period): Promise<RankRow[] | null> {

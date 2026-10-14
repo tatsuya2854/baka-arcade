@@ -1,9 +1,14 @@
-import type { GameModule, GameContext } from '../../core/types';
+import type { GameModule, GameContext, ResultArt } from '../../core/types';
 import { meta } from './meta';
-import { stageCfg, JUDGE, POINTS, COMBO, STAGE_BONUS, SPECIAL_MULT, LIVES, MIN_PULL, REACT_MS, BGM, type StageCfg } from './config';
+import { stageCfg, JUDGE, POINTS, COMBO, STAGE_BONUS, SPECIAL_MULT, LIVES, MIN_PULL, REACT_MS, BGM, HAIR, TITLE, type StageCfg } from './config';
 
 type Grade = 'PERFECT' | 'GREAT' | 'OK' | 'MISS';
 type Phase = 'idle' | 'pull' | 'react' | 'over';
+type Shape = 'normal' | 'long' | 'spiral' | 'rainbow' | 'earth';
+interface Rec { stage: number; grade: Grade; cm: number; shape: Shape; special: boolean; combo: number }
+const SHAPE_NAME: Record<Shape, string> = { normal: '普通', long: '異常に長い', spiral: '螺旋', rainbow: '虹色', earth: '地球一周' };
+const fmtCm = (cm: number) => cm >= 1e8 ? `${Math.round(cm / 1e5).toLocaleString()}km` : cm >= 100 ? `${(cm / 100).toFixed(1)}m` : `${cm.toFixed(1)}cm`;
+const RANK: Record<Grade, number> = { MISS: 0, OK: 1, GREAT: 2, PERFECT: 3 };
 interface Part { x: number; y: number; vx: number; vy: number; life: number; max: number; col: string; sz: number; rot: number; tear?: boolean }
 
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
@@ -18,6 +23,56 @@ export function gaugeAt(c: StageCfg, holdT: number): number {
 export function zoneAt(c: StageCfg, holdT: number): number {
   const z = c.zoneC + c.moveAmp * Math.sin(holdT * c.moveFreq);
   return clamp(z, c.zoneW + 0.03, 1 - c.zoneW - 0.02);
+}
+
+function drawStrand(c: CanvasRenderingContext2D, x: number, y: number, len: number, shape: Shape, t: number, lw: number) {
+  c.save(); c.lineCap = 'round'; c.lineWidth = lw;
+  const n = 36;
+  const pt = (f: number): [number, number] => {
+    if (shape === 'spiral') return [x + Math.sin(f * 22 + t * 2) * len * 0.05, y + f * len];
+    if (shape === 'long' || shape === 'earth') return [x + Math.sin(f * 9 + t) * len * 0.03, y + f * len];
+    return [x + Math.sin(f * 4 + t) * len * 0.04, y + f * len];
+  };
+  for (let i = 0; i < n; i++) {
+    const a = pt(i / n), b = pt((i + 1) / n);
+    c.strokeStyle = shape === 'rainbow' ? `hsl(${(i / n * 360 + t * 90) % 360},90%,55%)` : shape === 'earth' ? `hsl(${150 + i * 3},60%,45%)` : '#1e140e';
+    c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.stroke();
+  }
+  c.restore();
+}
+function drawSpecimens(c: CanvasRenderingContext2D, w: number, h: number, t: number, rs: Rec[], title: string) {
+  c.save();
+  const bg = c.createLinearGradient(0, 0, 0, h); bg.addColorStop(0, '#2a1a3a'); bg.addColorStop(1, '#0f0a1a'); c.fillStyle = bg; c.fillRect(0, 0, w, h);
+  const u = Math.min(w, h), pad = u * 0.04;
+  c.fillStyle = '#f4e6c8'; c.strokeStyle = '#c9a25a'; c.lineWidth = u * 0.012;
+  c.beginPath(); c.roundRect(pad, pad, w - pad * 2, h - pad * 2, u * 0.03); c.fill(); c.stroke();
+  c.fillStyle = '#5a3a1a'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = `900 ${u * 0.06}px sans-serif`;
+  c.fillText('鼻毛標本コレクション', w / 2, pad + u * 0.06);
+  const top = pad + u * 0.12, bot = h - pad - u * 0.1;
+  if (!rs.length) { c.font = `900 ${u * 0.05}px sans-serif`; c.fillText('標本なし', w / 2, h / 2); }
+  else {
+    const sorted = rs.slice().sort((a, b) => b.cm - a.cm), big = sorted[0], rest = sorted.slice(1, 9);
+    const bigH = (bot - top) * (rest.length ? 0.58 : 0.9);
+    // 最長を大きく(長さは見た目で圧縮)
+    drawCase(c, pad * 2, top, w - pad * 4, bigH, big, t, u, true);
+    if (rest.length) {
+      const cols = Math.min(4, rest.length), rowsN = Math.ceil(rest.length / cols), y0 = top + bigH + pad, cw = (w - pad * 2 - pad * (cols + 1)) / cols, rh = (bot - y0 - pad * (rowsN - 1)) / rowsN;
+      rest.forEach((r, i) => drawCase(c, pad * 2 + (i % cols) * (cw + pad) - pad * 0.5, y0 + Math.floor(i / cols) * (rh + pad), cw, rh, r, t, u * 0.6, false));
+    }
+  }
+  c.fillStyle = '#ff5470'; c.font = `900 ${u * 0.055}px sans-serif`; c.fillText(`「${title}」`, w / 2, h - pad - u * 0.04);
+  c.restore();
+}
+function drawCase(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: Rec, t: number, u: number, big: boolean) {
+  c.save();
+  c.fillStyle = '#fffaf0'; c.strokeStyle = '#a88a55'; c.lineWidth = 2; c.beginPath(); c.roundRect(x, y, w, h, 8); c.fill(); c.stroke();
+  const lab = h * 0.2, len = (h - lab - 14) * (r.shape === 'long' ? 1 : r.shape === 'earth' ? 1 : 0.85);
+  drawStrand(c, x + w / 2, y + 8, len, r.shape, t, big ? 4 : 2.5);
+  c.fillStyle = '#5a3a1a'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.font = `900 ${Math.max(10, u * (big ? 0.045 : 0.045))}px sans-serif`; c.fillText(`${fmtCm(r.cm)} ${SHAPE_NAME[r.shape]}`, x + w / 2, y + h - lab * 0.65);
+  c.fillStyle = r.grade === 'PERFECT' ? '#d9a400' : r.grade === 'GREAT' ? '#1fa86a' : '#3a86d8';
+  c.font = `900 ${Math.max(9, u * (big ? 0.035 : 0.04))}px sans-serif`; c.fillText(r.grade, x + w / 2, y + h - lab * 0.25);
+  c.restore();
 }
 
 const mod: GameModule = {
@@ -46,6 +101,7 @@ const mod: GameModule = {
     const parts: Part[] = [];
     let tip = { x: 0, y: 0, vx: 0, vy: 0, rot: 0 }; // 抜けた毛の飛行
     let overTimer = 0;
+    const recs: Rec[] = [];
 
     const pressHold = () => {
       if (finished || destroyed) return;
@@ -73,6 +129,9 @@ const mod: GameModule = {
         const mult = 1 + Math.min(combo - 1, COMBO.cap) * COMBO.step;
         gainedPts = Math.round((POINTS[grade] * (cfg.special ? SPECIAL_MULT : 1) + stage * STAGE_BONUS) * mult);
         score += gainedPts; reactMsg = grade;
+        const cmv = (HAIR.base + stage * HAIR.perStage + gg * HAIR.perGauge) * (cfg.special ? HAIR.specialMult : 1);
+        const shape: Shape = cfg.special && grade === 'PERFECT' ? 'earth' : cfg.special ? 'long' : grade === 'PERFECT' && combo >= 3 ? 'rainbow' : grade === 'OK' ? 'spiral' : 'normal';
+        recs.push({ stage, grade, cm: shape === 'earth' ? HAIR.earthCm : cmv, shape, special: cfg.special, combo });
         audio.sfx('pop'); setTimeout(() => !destroyed && audio.sfx(combo >= 3 || grade === 'PERFECT' ? 'combo' : 'ok'), 90);
         shakeT = 0.35; flash = grade === 'PERFECT' ? 1 : 0.6;
         const p = tipPos(reactG, 0);
@@ -94,9 +153,42 @@ const mod: GameModule = {
       cfg = stageCfg(stage); phase = 'idle'; holdT = 0; gauge = 0; zone = cfg.zoneC; stageIntro = 1.4;
     }
 
+    function makeArt(): ResultArt {
+      const rs = recs.slice();
+      const longest = rs.reduce<Rec | null>((a, r) => (!a || r.cm > a.cm ? r : a), null);
+      const best = rs.reduce<Grade>((a, r) => (RANK[r.grade] > RANK[a] ? r.grade : a), 'MISS');
+      const nPerf = rs.filter(r => r.grade === 'PERFECT').length;
+      const has = (sh: Shape) => rs.some(r => r.shape === sh);
+      let title: string, comment: string, rare: string | undefined;
+      if (has('earth')) { title = '鼻から出た世界遺産'; comment = '鼻毛が地球を一周しました。国連が調査に入ります。'; rare = 'earth'; }
+      else if (longest && longest.cm >= 100) { title = 'もはやロープ'; comment = '登山に使えるレベルの鼻毛。'; rare = 'rope'; }
+      else if (has('rainbow')) { title = '七色の鼻毛使い'; comment = '完璧を重ねた鼻毛は虹色に輝く。'; rare = 'rainbow'; }
+      else if (has('spiral')) { title = 'くるくる鼻毛マイスター'; comment = 'きわどい引き際で螺旋の鼻毛を獲得。'; rare = 'spiral'; }
+      else if (rs.length >= TITLE.legendPlucked && nPerf >= TITLE.legendPerfect) { title = '鼻毛界のレジェンド'; comment = '指先が鼻毛の声を聞いている。'; }
+      else if (nPerf >= 3) { title = '鼻毛ソムリエ'; comment = '引き際を知る男。'; }
+      else if (rs.length >= 8) { title = '鼻毛コレクター'; comment = '標本ケースが足りない。'; }
+      else if (rs.length >= 5) { title = '鼻毛職人'; comment = 'もう痛みを感じていない。'; }
+      else if (rs.length >= 3) { title = '鼻毛の見習い'; comment = '涙の数だけ強くなる。'; }
+      else if (rs.length >= 1) { title = 'ちょい抜き初心者'; comment = '最初の一本は忘れられない痛み。'; }
+      else { title = '鼻毛に愛された男'; comment = '1本も抜けず。鼻毛は守られた。'; }
+      const bestPct: Record<Grade, string> = { PERFECT: 'PERFECT', GREAT: 'GREAT', OK: 'OK', MISS: '-' };
+      const facts = [
+        { label: '抜いた本数', value: `${rs.length}本` },
+        { label: '最長の鼻毛', value: longest ? fmtCm(longest.cm) : '-' },
+        { label: '最高精度', value: bestPct[best] },
+      ];
+      const sc = score;
+      const draw = (c: CanvasRenderingContext2D, w: number, h: number, t: number) => drawSpecimens(c, w, h, t, rs, title);
+      return { title, comment, facts, rare, draw, postVariants: [
+        `鼻毛を${rs.length}本抜いて${sc}点！称号「${title}」 #鼻毛を抜け`,
+        `最長${longest ? fmtCm(longest.cm) : '0cm'}の鼻毛を抜いた…「${title}」`,
+        `${comment} 鼻毛標本${rs.length}本、${sc}点`,
+      ] };
+    }
+
     function endGame() {
       if (finished) return; finished = true;
-      ctx.finish({ score, scoreText: `${score}点`, shareText: `鼻毛を${plucked}本抜いて${score}点！`, durationMs: Math.round(performance.now() - startTime), detail: `ステージ${stage} / ${plucked}本` });
+      ctx.finish({ art: makeArt(), score, scoreText: `${score}点`, shareText: `鼻毛を${plucked}本抜いて${score}点！`, durationMs: Math.round(performance.now() - startTime), detail: `ステージ${stage} / ${plucked}本` });
     }
 
     // ---- 顔の幾何 ----
