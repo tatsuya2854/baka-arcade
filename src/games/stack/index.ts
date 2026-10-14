@@ -645,7 +645,7 @@ function start(ctx: GameContext) {
     g.fillText(`BEST ${Math.max(ctx.best, 0)}`, cw / 2, 100);
     // ライフ
     g.textAlign = 'left'; g.font = '900 24px sans-serif';
-    for (let i = 0; i < CFG.lives; i++) { g.fillStyle = i < lives ? '#ff3d81' : 'rgba(255,255,255,0.2)'; g.fillText('♥', 14 + i * 28, 36); }
+    for (let i = 0; i < CFG.lives; i++) { g.fillStyle = i < lives ? '#ff3d81' : 'rgba(255,255,255,0.2)'; g.fillText('♥', 58 + i * 26, 36); }
     // バナー
     for (const b of banners) {
       const a = b.life / b.max, inn = Math.min(1, b.life * 6), out = Math.min(1, (b.max - b.life) * 4);
