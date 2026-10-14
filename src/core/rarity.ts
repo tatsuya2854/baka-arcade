@@ -3,7 +3,7 @@ export interface RareStat { plays: number; rares: Record<string, number> }
 const EST: Record<string, number> = { // 設計時の見積り(%)。実プレイでは異なる可能性あり
   'stack:gold': 3, 'stack:inverted': 1.2, 'stack:giant_ok': 4, 'stack:lean': 6, 'fart:space': 2, 'fart:tiny': 5, 'fart:bird': 6, 'fart:planet': 0.8,
   'hair:miracle': 4, 'hair:regrow': 1.5, 'hair:windmaster': 2, 'hair:flyaway': 8, 'nose:rainbow': 3, 'nose:spiral': 6, 'nose:earth': 0.9, 'nose:rope': 2,
-  'button:legend': 0.6, 'button:hundred': 2, 'button:inverted': 5, 'button:ending': 0.5,
+  'button:legend': 0.6, 'button:hundred': 2, 'button:inverted': 5, 'button:ending': 0.5, 'egg:bullseye': 2, 'egg:edge': 3, 'egg:yolkburst': 6, 'egg:miss': 8, 'toothpaste:exact': 1.5, 'toothpaste:zero': 4, 'toothpaste:mountain': 5, 'toothpaste:near': 6, 'usb:first': 12, 'usb:curse': 5, 'usb:force': 3, 'usb:perfect': 1, 'ketchup:golden': 2, 'ketchup:flood': 7, 'ketchup:drop': 4, 'ketchup:burst': 3, 'tissue:one': 15, 'tissue:avalanche': 6, 'tissue:torn': 4, 'tissue:chain': 3,
 };
 const cache = new Map<string, Promise<RareStat | null>>();
 export function fetchRareStat(game: string): Promise<RareStat | null> {

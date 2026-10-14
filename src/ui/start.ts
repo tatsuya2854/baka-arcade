@@ -2,6 +2,11 @@
 import { drawUncle } from '../core/characters';
 import type { GameMeta } from '../core/types';
 
+import { demo as demo_egg } from '../games/egg/demo';
+import { demo as demo_toothpaste } from '../games/toothpaste/demo';
+import { demo as demo_usb } from '../games/usb/demo';
+import { demo as demo_ketchup } from '../games/ketchup/demo';
+import { demo as demo_tissue } from '../games/tissue/demo';
 type Demo = (g: CanvasRenderingContext2D, w: number, h: number, t: number) => void;
 const ease = (x: number) => x * x * (3 - 2 * x);
 const finger = (g: CanvasRenderingContext2D, x: number, y: number, down: number, s = 1) => {
@@ -13,6 +18,11 @@ const finger = (g: CanvasRenderingContext2D, x: number, y: number, down: number,
 const floor = (g: CanvasRenderingContext2D, w: number, h: number, c: string) => { g.fillStyle = c; g.beginPath(); g.roundRect(w * 0.18, h * 0.82, w * 0.64, 16, 8); g.fill(); };
 
 const DEMOS: Record<string, Demo> = {
+  egg: demo_egg,
+  toothpaste: demo_toothpaste,
+  usb: demo_usb,
+  ketchup: demo_ketchup,
+  tissue: demo_tissue,
   stack: (g, w, h, t) => { // おじさんが左右に動き、タップで落ちて積まれる
     const c = (t % 3) / 3, sw = Math.sin(t * 2.4) * w * 0.2; floor(g, w, h, '#ff8a3d');
     drawUncle(g, { x: w / 2, y: h * 0.76, h: h * 0.3, type: 'normal', expr: 'sweat', t });

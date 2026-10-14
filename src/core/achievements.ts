@@ -5,7 +5,7 @@ export const ACHS: Ach[] = [
   { id: 'first', name: 'はじめの一歩', desc: '初めて遊んだ', emoji: '🐣' },
   { id: 'three', name: '3プレイの壁', desc: '累計3回遊んだ', emoji: '🔥' },
   { id: 'ten', name: 'もはや常連', desc: '累計10回遊んだ', emoji: '🎰' },
-  { id: 'all5', name: '全ゲーム制覇', desc: '5ゲームすべて遊んだ', emoji: '🏆' },
+  { id: 'all5', name: '全ゲーム制覇', desc: '10ゲームすべて遊んだ', emoji: '🏆' },
   { id: 'stack10', name: 'おじさん10人', desc: 'おじさんを10人積んだ', emoji: '🧓' },
   { id: 'stack20', name: '巨大おじさんの洗礼', desc: 'おじさんを20人積んだ', emoji: '🗼' },
   { id: 'fart500', name: '成層圏おなら', desc: 'おならで500m到達', emoji: '🚀' },
@@ -15,7 +15,7 @@ export const ACHS: Ach[] = [
 ];
 const rules: Record<string, () => boolean> = {
   first: () => total() >= 1, three: () => total() >= 3, ten: () => total() >= 10,
-  all5: () => ['stack', 'fart', 'hair', 'nose', 'button'].every(g => (load().plays[g] ?? 0) > 0),
+  all5: () => ['stack', 'fart', 'hair', 'nose', 'button', 'egg', 'toothpaste', 'usb', 'ketchup', 'tissue'].every(g => (load().plays[g] ?? 0) > 0),
   stack10: () => (load().best.stack ?? 0) >= 10, stack20: () => (load().best.stack ?? 0) >= 20,
   fart500: () => (load().best.fart ?? 0) >= 500, hair30: () => (load().best.hair ?? 0) >= 30,
   nose1k: () => (load().best.nose ?? 0) >= 1000, bp100: () => load().bp >= 100,

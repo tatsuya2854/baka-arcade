@@ -18,7 +18,7 @@ import { genVariants } from '../core/post';
 
 const esc = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 export function toast(msg: string) { const t = document.createElement('div'); t.className = 'toast bottom'; t.textContent = msg; document.body.append(t); setTimeout(() => t.remove(), 2600); }
-const TAGS: Record<string, string> = { stack: '#おじさんを積め', fart: '#おならエレベーター', hair: '#ハゲを守れ', nose: '#鼻毛を抜け', button: '#絶対に押すなボタン' };
+const TAGS: Record<string, string> = { stack: '#おじさんを積め', fart: '#おならエレベーター', hair: '#ハゲを守れ', nose: '#鼻毛を抜け', button: '#絶対に押すなボタン', egg: '#目玉焼きを落とせ', toothpaste: '#歯磨き粉10cm', usb: '#USBを一発で', ketchup: '#ケチャップ黄金比', tissue: '#ティッシュ1枚だけ' };
 
 export function renderPlay(app: HTMLElement, id: string, challenge?: Challenge): () => void {
   const meta = ALL_META.find(m => m.id === id);

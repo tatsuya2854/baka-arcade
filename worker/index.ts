@@ -8,11 +8,14 @@ interface Env { ASSETS: Fetcher; ARCADE: DurableObjectNamespace<Arcade>; ADMIN_T
 const LIMITS: Record<string, { maxPerSec: number; maxScore: number }> = {
   stack: { maxPerSec: 1.2, maxScore: 300 }, fart: { maxPerSec: 40, maxScore: 60000 }, hair: { maxPerSec: 1.05, maxScore: 600 },
   nose: { maxPerSec: 130, maxScore: 20000 }, button: { maxPerSec: 3, maxScore: 60 },
+  egg: { maxPerSec: 400, maxScore: 1000 }, toothpaste: { maxPerSec: 400, maxScore: 1000 }, usb: { maxPerSec: 400, maxScore: 1000 }, ketchup: { maxPerSec: 400, maxScore: 1000 }, tissue: { maxPerSec: 400, maxScore: 1000 },
 };
 const PAGES: Record<string, { title: string; command: string }> = {
   'ojisan-stack': { title: 'おじさんを積め！', command: 'おじさんを、落として積め。' }, 'fart-elevator': { title: 'おならエレベーター', command: 'タップで、空まで飛べ。' },
   'save-the-hair': { title: 'ハゲを守れ！', command: '長押しで、最後の一本を守れ。' }, 'nosehair-pull': { title: '鼻毛を抜け！', command: '長押しして、ベストで離せ。' },
   'dont-press': { title: '絶対に押すなボタン', command: '絶対に、押すな。' },
+  'egg-landing': { title: '目玉焼きを落とせ', command: '卵を、フライパンの真ん中に落とせ。' }, 'toothpaste-10cm': { title: '歯磨き粉10.0cm', command: '10.0cmだけ、歯磨き粉を出せ。' },
+  'usb-insert': { title: 'USBを一発で', command: 'USBを、一発で挿せ。' }, 'ketchup-pour': { title: 'ケチャップ黄金比', command: 'ケチャップを、ちょうどの量だけ出せ。' }, 'tissue-one': { title: 'ティッシュ1枚だけ', command: 'ティッシュを、1枚だけ取れ。' },
 };
 const SOURCES = new Set(['x', 'note', 'instagram', 'tiktok', 'youtube', 'threads']);
 const EVENTS = new Set(['game_start', 'game_over', 'retry', 'game_switch', 'share_click', 'bp_earned', 'character_unlocked', 'visit', 'third_play', 'result_view', 'image_save', 'link_copy', 'challenge_create', 'challenge_visit', 'challenge_play', 'video_save']);

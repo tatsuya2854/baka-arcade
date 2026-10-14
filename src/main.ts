@@ -1,6 +1,6 @@
 import './ui/styles.css';
 import { audio, go } from './core/shared';
-import { bySlug } from './core/registry';
+import { bySlug, ALL_META } from './core/registry';
 import { renderHub } from './ui/hub';
 import { renderPlay } from './ui/play';
 import { track, setRef, setUtm } from './core/analytics';
@@ -8,7 +8,7 @@ import { parse as parseChallenge } from './core/challenge';
 import { load, mutate, dayKey } from './core/storage';
 
 const app = document.getElementById('app')!;
-const GAME_IDS = ['stack', 'fart', 'hair', 'nose', 'button'];
+const GAME_IDS = ALL_META.map(m => m.id);
 let cleanup: (() => void) | null = null;
 
 let routeSeq = 0;

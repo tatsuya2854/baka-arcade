@@ -6,6 +6,11 @@ export const GAME_LOADERS: Record<string, () => Promise<GameModule>> = {
   hair: () => import('../games/hair').then(m => m.default),
   nose: () => import('../games/nose').then(m => m.default),
   button: () => import('../games/button').then(m => m.default),
+  egg: () => import('../games/egg').then(m => m.default),
+  toothpaste: () => import('../games/toothpaste').then(m => m.default),
+  usb: () => import('../games/usb').then(m => m.default),
+  ketchup: () => import('../games/ketchup').then(m => m.default),
+  tissue: () => import('../games/tissue').then(m => m.default),
 };
 /** 一覧表示用メタ（ゲーム本体は遅延ロード）。各ゲームの meta.ts を参照 */
 import { meta as stack } from '../games/stack/meta';
@@ -13,7 +18,12 @@ import { meta as fart } from '../games/fart/meta';
 import { meta as hair } from '../games/hair/meta';
 import { meta as nose } from '../games/nose/meta';
 import { meta as button } from '../games/button/meta';
-export const ALL_META = [stack, fart, hair, nose, button];
+import { meta as egg } from '../games/egg/meta';
+import { meta as toothpaste } from '../games/toothpaste/meta';
+import { meta as usb } from '../games/usb/meta';
+import { meta as ketchup } from '../games/ketchup/meta';
+import { meta as tissue } from '../games/tissue/meta';
+export const ALL_META = [stack, fart, hair, nose, button, egg, toothpaste, usb, ketchup, tissue];
 
 export const bySlug = (s: string) => ALL_META.find(m => m.slug === s || m.id === s);
 export const gamePath = (id: string) => `/games/${ALL_META.find(m => m.id === id)?.slug ?? id}`;
