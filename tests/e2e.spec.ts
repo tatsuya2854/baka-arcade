@@ -58,7 +58,7 @@ test('mute persists and challenge url opens game with banner', async ({ page }) 
 test('direct game URL shows start screen immediately (no portal), OGP is per-game', async ({ page, request }) => {
   await page.goto('/games/ojisan-stack');
   await expect(page.locator('.cmd')).toHaveText('おじさんを、落として積め。'); await expect(page.locator('#start')).toBeVisible();
-  await expect(page.locator('.hub')).toHaveCount(0); await expect(page.locator('canvas.demo')).toBeVisible();
+  await expect(page.locator('.hub')).toHaveCount(0); await expect(page.locator('.keyimg')).toBeVisible();
   const html = await (await request.get('/games/dont-press')).text();
   expect(html).toContain('og/dont-press.png'); expect(html).toContain('絶対に押すなボタン｜BAKA ARCADE');
   await page.locator('#start').click(); await expect(page.locator('#groot canvas').first()).toBeVisible();
