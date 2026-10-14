@@ -31,7 +31,7 @@ export function renderHub(app: HTMLElement) {
   app.innerHTML = `<div class="hub">
   <div class="top"><div class="logo">BAKA ARCADE</div><div style="display:flex;gap:6px"><span class="chip bp">💎 ${s.bp} BP</span><button class="chip" id="mute">${audio.muted ? '🔇' : '🔊'}</button></div></div>
   <section class="hero"><div class="faces"><span>🧓</span><span>💨</span><span>🌬️</span><span>👃</span><span>🔴</span></div>
-    <h1>BAKA<br>ARCADE</h1><p>くだらない。でも、やめられない。</p>
+    <h1>BAKA ARCADE</h1><p>くだらない。でも、やめられない。</p>
     <button class="cta" data-play="${popular.id}">▶ いますぐ遊ぶ</button>
     <div class="muted" style="margin-top:10px">無料・ログイン不要・1プレイ10〜30秒</div></section>
 

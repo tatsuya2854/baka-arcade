@@ -101,3 +101,4 @@ a.card{text-decoration:none;color:inherit}
 .hero h1{font-size:clamp(34px,11vw,52px)}.hero h1 br{display:none}
 .hero p{margin:6px 0 10px;font-size:15px}.hero .cta{padding:13px 30px;font-size:18px}.hero .muted{display:none}
 .hub h2{margin:16px 2px 8px}
+.hero h1{font-size:clamp(28px,9.2vw,48px);white-space:nowrap}
