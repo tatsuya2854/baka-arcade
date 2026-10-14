@@ -1,0 +1,11 @@
+# ゲーム担当エージェント共通ブリーフ（BAKA ARCADE）
+- 作業フォルダ: `src/games/<id>/` のみ編集。他のファイル（src/core, src/ui, meta.ts, registry）は編集禁止。必要な変更はレポートで依頼。
+- 既存: `src/games/<id>/meta.ts`（編集不可）。あなたは `src/games/<id>/index.ts` に `export default { meta, start(ctx) }`（GameModule）を実装する。
+- 型: `src/core/types.ts`。音: ctx.audio（`src/core/audio.ts`、sfx名・startBgm あり。無い音は audio.ts に頼まず osc は使えないので sfx の variant を活用）。キャラ: `src/core/characters.ts` の drawUncle。
+- 描画: ctx.root 内に <canvas> を自作（全画面・devicePixelRatio対応・resize対応・touch-action:none）。DOM の背景はルートに既にダークがある。スマホ縦画面(390x844)最優先、PCでも遊べる（マウス/キー）。
+- 開始: 最初のタップで ctx.audio.unlock() と ctx.started() を呼ぶ。終了: ctx.finish({score, scoreText, shareText, durationMs}) を1回だけ。リトライは結果画面側が destroy→start し直すので、start は毎回クリーンな状態で始まること。destroy() で rAF・イベントリスナ・タイマー・BGM(audio.stopBgm)・DOM を全て解放（メモリリーク禁止）。
+- 難易度・物理パラメータは `src/games/<id>/config.ts` に分離して export（調整可能に）。
+- 外部画像素材なし。Canvas/SVG/プログラム描画で個性的に（単純な平行移動だけは禁止、アニメ・表情・パーティクル・画面揺れ・スコア演出を入れる）。
+- 面白さ最優先: 3秒でルール理解、1プレイ10〜30秒（最初は短く失敗理由が分かる）、即リトライ。最初のプレイは理不尽にしない。
+- 確認: `npx tsc --noEmit`（自分のフォルダのエラーを0に）。ブラウザ検証は Playwright が使える（`npx playwright` 導入済み。ただし統合は後で行うので、単体ページが必要なら一時的に `/tmp` ではなくスクラッチで vite を別ポートに）。ログは長く出さない。
+- 最後に短いレポート（実装内容・調整可能パラメータ・既知の課題）だけ返す。
