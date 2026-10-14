@@ -1,5 +1,6 @@
 import './ui/styles.css';
-import { audio } from './core/shared';
+import { audio, go } from './core/shared';
+import { GAME_LOADERS as _g } from './core/registry'; void _g;
 import { renderHub } from './ui/hub';
 import { renderPlay } from './ui/play';
 import { track, setRef } from './core/analytics';
