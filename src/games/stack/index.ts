@@ -1,6 +1,7 @@
 import { Engine, Bodies, Body, Composite, Events, Sleeping } from 'matter-js';
 import type { GameModule, GameContext, ResultArt } from '../../core/types';
 import { drawUncle, drawBubble, TYPE_DIM, type UncleType, type Expr } from '../../core/characters';
+import { Stage3D } from '../../core/uncle3d';
 import { meta } from './meta';
 import { CFG, lerp } from './config';
 
@@ -70,9 +71,20 @@ function start(ctx: GameContext) {
   const { root, audio } = ctx;
   const canvas = document.createElement('canvas');
   canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block;user-select:none;-webkit-user-select:none';
-  root.appendChild(canvas);
-  const g = canvas.getContext('2d')!;
+  const gTop = canvas.getContext('2d')!;
+  let g = gTop;
   let cw = 390, ch = 844, dpr = 1, k = 1;
+  // 3D描画（WebGL）。失敗したら従来の2D描画のまま。重ね順: 背景2D → three → 前景2D(canvas: 演出+HUD)
+  let stage: Stage3D | null = null, bgCanvas: HTMLCanvasElement | null = null, gBg: CanvasRenderingContext2D | null = null, use3d = false;
+  function disable3d() { use3d = false; if (bgCanvas) bgCanvas.style.display = 'none'; if (stage) stage.canvas.style.display = 'none'; g = gTop; }
+  try {
+    stage = new Stage3D(() => disable3d());
+    bgCanvas = document.createElement('canvas'); bgCanvas.style.cssText = canvas.style.cssText; gBg = bgCanvas.getContext('2d');
+    stage.canvas.style.cssText = canvas.style.cssText + ';pointer-events:none';
+    if (!gBg) throw new Error('2d');
+    root.append(bgCanvas, stage.canvas, canvas); use3d = true;
+  } catch { try { stage?.dispose(); } catch { /* ignore */ } stage = null; bgCanvas = null; gBg = null; use3d = false; root.appendChild(canvas); }
+  let shX = 0, shY = 0;
 
   // ---------- 物理 ----------
   const engine = Engine.create({
@@ -503,9 +515,11 @@ function start(ctx: GameContext) {
     g.fillStyle = '#3a1568'; g.beginPath(); g.arc(cw * 0.8 + 10, ch * 0.3 + scroll * 0.5 - 4, 24, 0, 7); g.fill(); g.globalAlpha = 1;
   }
 
-  function drawWorld() {
+  // pass: 0=全部(2D) 1=背面のみ(3D時) 2=前面のみ(3D時: 演出)
+  function drawWorld(pass: 0 | 1 | 2 = 0) {
     const sc = k * zoom, gScreen = hy() + (0 - holderY) * sc;
     // 街のシルエット（地面基準）
+    if (pass !== 2) {
     g.save();
     g.translate(cw / 2, gScreen); g.scale(sc * 0.8, sc * 0.8);
     for (const b of city) {
@@ -514,13 +528,15 @@ function start(ctx: GameContext) {
       for (let y = 40 - b.h + 14; y < 20; y += 24) for (let x = b.x + 6; x < b.x + b.w - 8; x += 12) if (((x * 7 + y * 3) | 0) % 5 < 2 * b.lit + 0.8) g.fillRect(x, y, 5, 8);
     }
     g.restore();
+    }
 
     g.save();
-    g.translate(cw / 2 + (rnd() - 0.5) * shake, hy() + (rnd() - 0.5) * shake);
+    g.translate(cw / 2 + shX, hy() + shY);
     g.scale(sc, sc); g.translate(0, -holderY);
 
     // 土台
     const pw = CFG.platformW, th = CFG.platformThick;
+    if (pass === 0) {
     g.save(); g.translate(0, platFall.y); g.rotate(platFall.rot);
     if (phase !== 'over') { // 柱
       const pg = g.createLinearGradient(-40, 0, 40, 0); pg.addColorStop(0, '#5a2f8a'); pg.addColorStop(0.5, '#8a52c0'); pg.addColorStop(1, '#4a2578');
@@ -532,9 +548,10 @@ function start(ctx: GameContext) {
     g.fillStyle = 'rgba(0,0,0,0.25)';
     for (let x = -pw / 2 + 16; x < pw / 2 - 20; x += 36) { g.beginPath(); g.moveTo(x, th - 3); g.lineTo(x + 14, th - 3); g.lineTo(x + 28, 12); g.lineTo(x + 14, 12); g.closePath(); g.fill(); }
     g.restore();
+    }
 
     // 狙いガイド
-    if (phase === 'aim') {
+    if (pass !== 2 && phase === 'aim') {
       const hx = holderX(), isG = holder.type === 'giant', tc = towerCenter();
       g.save(); g.setLineDash([8, 10]); g.lineWidth = 3;
       const endY = isG ? -tH : (Math.abs(hx) < pw / 2 ? -tH * (Math.abs(hx - tc) < 70 ? 1 : 0) : 120);
@@ -550,25 +567,24 @@ function start(ctx: GameContext) {
     }
 
     // 積まれたおじさん
-    const rank = standing().sort((a, b) => a.body.position.y - b.body.position.y);
-    for (const u of uncles) drawOne(u, rank.indexOf(u));
+    if (pass === 0) { const rank = standing().sort((a, b) => a.body.position.y - b.body.position.y); for (const u of uncles) drawOne(u, rank.indexOf(u)); }
 
     // 保持中のおじさん + レール
-    if (phase === 'aim' || phase === 'warn') {
+    if (pass !== 2 && (phase === 'aim' || phase === 'warn')) {
       const R = range() + 40 * (holder.type === 'giant' ? 1 : 0), top = holderY - sizeOf(holder.type) * 0.75;
       g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = 4; g.beginPath(); g.moveTo(-R - 30, top); g.lineTo(R + 30, top); g.stroke();
       if (phase === 'aim') {
         const hx = holderX(), h = sizeOf(holder.type), ap = holder.appear, s = 0.4 + 0.6 * (1 - Math.pow(1 - ap, 3));
         g.strokeStyle = '#ccc'; g.lineWidth = 3; g.beginPath(); g.moveTo(hx, top); g.lineTo(hx, holderY - h * 0.5); g.stroke();
         g.fillStyle = '#ffd93d'; g.fillRect(hx - 9, top - 5, 18, 10);
-        g.save(); g.translate(hx, holderY); g.scale(s, s);
+        if (pass === 0) { g.save(); g.translate(hx, holderY); g.scale(s, s);
         drawUncle(g, { x: 0, y: 0, h, rot: Math.cos(ph * 1.7) * 0.14, type: holder.type, skin: holder.skin, expr: holder.type === 'giant' ? 'angry' : 'happy', t, flail: 0.25, seed: 3 });
-        g.restore();
+        g.restore(); }
       }
     }
 
     // パーティクル
-    for (const p of parts) {
+    if (pass !== 1) for (const p of parts) {
       const a = 1 - p.life / p.max; g.globalAlpha = Math.max(0, p.kind === 'conf' ? Math.min(1, a * 2) : a);
       g.fillStyle = p.color;
       if (p.kind === 'dust') { g.beginPath(); g.arc(p.x, p.y, p.size * (1 + p.life), 0, 7); g.fill(); }
@@ -576,7 +592,7 @@ function start(ctx: GameContext) {
     }
     g.globalAlpha = 1;
     // 浮かぶ文字
-    for (const x of texts) {
+    if (pass !== 1) for (const x of texts) {
       const a = 1 - x.life / x.max; g.globalAlpha = Math.min(1, a * 2);
       g.font = `900 ${x.size}px "Hiragino Sans",sans-serif`; g.textAlign = 'center'; g.lineWidth = 5; g.strokeStyle = '#111'; g.strokeText(x.text, x.x, x.y); g.fillStyle = x.color; g.fillText(x.text, x.x, x.y);
     }
@@ -584,16 +600,16 @@ function start(ctx: GameContext) {
     g.restore();
 
     // 吹き出し（画面座標）
-    for (const b of bubbles) {
+    if (pass !== 1) for (const b of bubbles) {
       const p = b.u.body.position, sx = cw / 2 + p.x * sc, sy = hy() + (p.y - holderY) * sc;
       const cy = Math.min(ch - 40, Math.max(150, sy - b.u.h * sc * 0.6)), cx = Math.min(cw - 50, Math.max(50, sx));
       g.globalAlpha = Math.min(1, (1.1 - b.life) * 3); drawBubble(g, b.text, cx, cy, 22); g.globalAlpha = 1;
     }
   }
 
-  function drawOne(u: Uncle, rank: number) {
-    const b = u.body, h = u.h;
-    const px = b.position.x + Math.sin(b.angle) * 0.025 * h, py = b.position.y - Math.cos(b.angle) * 0.025 * h;
+  let exprR: Expr = 'idle', flailR = 0;
+  function exprFor(u: Uncle, rank: number) {
+    const b = u.body;
     let expr: Expr = 'idle', flail = 0;
     const wob = b.speed + Math.abs(b.angularVelocity) * 25;
     if (phase === 'over') { expr = u.seed % 2 < 1 ? 'dead' : 'cry'; flail = 1; }
@@ -602,6 +618,12 @@ function start(ctx: GameContext) {
     else if (u.happyT > 0) { expr = 'happy'; }
     else if (wob > 0.5) { expr = 'scared'; flail = Math.min(0.8, wob * 0.3); }
     else if (rank >= 4) expr = 'sweat';
+    exprR = expr; flailR = flail;
+  }
+  function drawOne(u: Uncle, rank: number) {
+    const b = u.body, h = u.h;
+    const px = b.position.x + Math.sin(b.angle) * 0.025 * h, py = b.position.y - Math.cos(b.angle) * 0.025 * h;
+    exprFor(u, rank); const expr = exprR, flail = flailR;
     const sq = u.impact * 0.14;
     g.save(); g.translate(px, py); g.rotate(b.angle); g.scale(1 + sq, 1 - sq);
     drawUncle(g, { x: 0, y: 0, h, type: u.type, skin: u.skin, expr, flail, t: t + u.seed, seed: u.seed });
@@ -644,8 +666,40 @@ function start(ctx: GameContext) {
     }
   }
 
+  function render3d() {
+    const st = stage!, sc = k * zoom;
+    st.setView(sc, cw / 2 + shX, hy() + shY - holderY * sc, cw, ch);
+    st.setPlatform(platFall.y, platFall.rot, phase !== 'over');
+    st.beginFrame();
+    const rank = standing().sort((a, b) => a.body.position.y - b.body.position.y);
+    const ramp = phase === 'over' ? Math.min(1, overT * 1.5) : 0;
+    for (const u of uncles) {
+      const b = u.body, h = u.h;
+      exprFor(u, rank.indexOf(u));
+      const o = st.uncle(u.id, u.type, u.skin);
+      o.pose(st.kit, exprR, flailR, t + u.seed, u.seed);
+      // 崩壊時は少し奥行き方向にも散らす
+      const zs = ramp ? (((u.seed * 7.31) % 1) - 0.4) * 140 * ramp : 0, ry = ramp ? Math.sin(u.seed * 3.7) * 0.9 * ramp : 0;
+      o.place(b.position.x + Math.sin(b.angle) * 0.025 * h, -(b.position.y - Math.cos(b.angle) * 0.025 * h), zs, b.angle, h, u.impact * 0.14, ry);
+    }
+    if (phase === 'aim') {
+      const hx = holderX(), h = sizeOf(holder.type), ap = holder.appear, s = 0.4 + 0.6 * (1 - Math.pow(1 - ap, 3));
+      const o = st.uncle(-1, holder.type, holder.skin);
+      o.pose(st.kit, holder.type === 'giant' ? 'angry' : 'happy', 0.25, t, 3);
+      o.place(hx, -holderY, 0, Math.cos(ph * 1.7) * 0.14, h * s, 0, 0);
+    }
+    st.endFrame(); st.render();
+  }
   function render() {
-    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    shX = (rnd() - 0.5) * shake; shY = (rnd() - 0.5) * shake;
+    if (use3d && stage && gBg) {
+      g = gBg; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.textBaseline = 'alphabetic'; drawBg(); drawWorld(1);
+      render3d();
+      g = gTop; g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, canvas.width, canvas.height);
+      g.setTransform(dpr, 0, 0, dpr, 0, 0); g.textBaseline = 'alphabetic'; drawWorld(2); drawHud();
+      return;
+    }
+    g = gTop; g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.textBaseline = 'alphabetic';
     drawBg(); drawWorld(); drawHud();
   }
@@ -655,6 +709,8 @@ function start(ctx: GameContext) {
     cw = Math.max(200, r.width || innerWidth); ch = Math.max(300, r.height || innerHeight);
     dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = Math.round(cw * dpr); canvas.height = Math.round(ch * dpr);
+    if (bgCanvas) { bgCanvas.width = canvas.width; bgCanvas.height = canvas.height; }
+    stage?.resize(cw, ch, dpr);
     k = Math.min(cw / 400, ch / 760);
   }
   resize();
@@ -685,7 +741,7 @@ function start(ctx: GameContext) {
   if (location.pathname.includes('dev')) {
     (window as any).__stack = {
       get phase() { return phase; }, get lives() { return lives; }, get score() { return score(); },
-      get hx() { return holderX(); }, get tc() { return towerCenter(); }, tap: onTap, get holder() { return holder.type; },
+      get hx() { return holderX(); }, get tc() { return towerCenter(); }, tap: onTap, get holder() { return holder.type; }, get use3d() { return use3d; },
       get bodies() { return uncles.map(u => ({ x: u.body.position.x, y: u.body.position.y, a: u.body.angle, vx: u.body.velocity.x, vy: u.body.velocity.y, sleeping: u.body.isSleeping, landed: u.landed, lost: u.lost, type: u.type })); },
     };
   }
@@ -696,7 +752,8 @@ function start(ctx: GameContext) {
       canvas.removeEventListener('pointerdown', onPointer);
       removeEventListener('keydown', onKey); removeEventListener('resize', resize); ro.disconnect();
       Events.off(engine, 'collisionStart'); Composite.clear(world, false); Engine.clear(engine);
-      audio.stopBgm(); canvas.remove();
+      audio.stopBgm(); canvas.remove(); bgCanvas?.remove();
+      if (stage) { stage.dispose(); stage = null; } use3d = false;
       if ((window as any).__stack) delete (window as any).__stack;
     },
   };
