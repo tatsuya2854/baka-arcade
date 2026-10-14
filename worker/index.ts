@@ -9,6 +9,7 @@ const LIMITS: Record<string, { maxPerSec: number; maxScore: number }> = {
   stack: { maxPerSec: 1.2, maxScore: 300 }, fart: { maxPerSec: 40, maxScore: 60000 }, hair: { maxPerSec: 1.05, maxScore: 600 },
   nose: { maxPerSec: 130, maxScore: 20000 }, button: { maxPerSec: 3, maxScore: 60 },
 };
+const SOURCES = new Set(['x', 'note', 'instagram', 'tiktok', 'youtube', 'threads']);
 const EVENTS = new Set(['game_start', 'game_over', 'retry', 'game_switch', 'share_click', 'bp_earned', 'character_unlocked', 'visit', 'third_play', 'result_view', 'image_save', 'link_copy', 'challenge_create', 'challenge_visit', 'challenge_play', 'video_save']);
 const MIN_PLAY_MS = 3000, SLACK_MS = 2500;
 const JST = 9 * 3600e3;
@@ -99,6 +100,9 @@ export class Arcade extends DurableObject<Env> {
         const via = e.props?.via; if (e.ev === 'share_click' && ['x', 'line', 'web', 'image'].includes(via)) keys.push(`share_click_${via}|${game}`);
         const rare = e.props?.rare; if (e.ev === 'game_over' && game && typeof rare === 'string' && /^\w{1,20}$/.test(rare)) keys.push(`rare|${game}:${rare}`);
         const ref = e.props?.ref; if (ref === 'share' || ref === 'challenge') { keys.push(`${e.ev}@${ref}|${game}`); if (e.props?.returning === true) keys.push(`${e.ev}_returning@${ref}|`); }
+        // 流入元別（SNS）・投稿別。許可リスト＋英数のみ（キー爆発とインジェクション防止）
+        const src = String(e.props?.src ?? ''), ct = String(e.props?.ct ?? '');
+        if (SOURCES.has(src)) { keys.push(`${e.ev}~${src}|${game}`); if (/^[\w-]{1,32}$/.test(ct)) keys.push(`${e.ev}~${src}:${ct}|${game}`); }
         for (const k of keys) this.sql.exec('INSERT INTO ev VALUES(?,?,1) ON CONFLICT(day,k) DO UPDATE SET n=n+1', day, k);
       }
       return json({ ok: true });
@@ -133,7 +137,10 @@ export class Arcade extends DurableObject<Env> {
         reshare_rate_from_inflow: div(sum('share_click@challenge|') + sum('share_click@share|'), sum('game_start@challenge|') + sum('game_start@share|')),
         note: 'shares=ボタン押下。SNSへの実投稿数は取得不能（推定のみ）',
       };
-      return json({ kpi, viral, totals: tot, rows });
+      // SNS別・投稿別: キー形式 `<event>~<source>[:<post>]|<game>`
+      const by_source: Record<string, Record<string, number>> = {};
+      for (const [k, n] of Object.entries(tot)) { const m = k.match(/^(\w+)~([\w-]+)(?::([\w-]+))?\|/); if (!m) continue; const id = m[3] ? `${m[2]}:${m[3]}` : m[2]; (by_source[id] ??= {})[m[1]] = (by_source[id][m[1]] ?? 0) + n; }
+      return json({ kpi, viral, by_source, totals: tot, rows });
     }
     return json({ error: 'not found' }, 404);
   }

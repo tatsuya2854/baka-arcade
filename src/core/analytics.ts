@@ -7,8 +7,11 @@ let plays = 0;
 const queue: any[] = [];
 // 実測できるのは「共有ボタン押下・画像保存・挑戦URL発行/訪問/プレイ」まで。SNSへの実際の投稿数は取得不能（推定のみ）。
 let refTag = ''; export const setRef = (r: string) => { refTag = r; };
+// 流入元（UTM）。visit 以外の全イベントに付けて「どのSNS・どの投稿から来た人の行動か」を追えるようにする
+let utmTag: { src: string; cp: string; ct: string } | null = null; export const setUtm = (u: { src: string; cp: string; ct: string }) => { utmTag = u; };
 export function track(ev: Ev, props: Record<string, string | number | boolean> = {}) {
   if (refTag && ev !== 'visit' && !props.ref) props = { ...props, ref: refTag };
+  if (utmTag && !props.src) props = { ...props, src: utmTag.src, cp: utmTag.cp, ct: utmTag.ct };
   if (navigator.doNotTrack === '1') return;
   queue.push({ ev, props, sid, t: Date.now() });
   if (ev === 'game_start') {
