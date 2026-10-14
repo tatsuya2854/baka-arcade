@@ -55,6 +55,10 @@ export interface GameInstance {
 
 export interface GameMeta {
   id: string;
+  /** 専用URL: /games/<slug>（SNS等から直接開くとこのゲームだけが即表示される） */
+  slug: string;
+  /** 開始画面の命令文（説明ではなく命令1つ） */
+  command: string;
   no: number;
   title: string;
   tagline: string;

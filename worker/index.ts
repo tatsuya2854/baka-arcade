@@ -9,6 +9,11 @@ const LIMITS: Record<string, { maxPerSec: number; maxScore: number }> = {
   stack: { maxPerSec: 1.2, maxScore: 300 }, fart: { maxPerSec: 40, maxScore: 60000 }, hair: { maxPerSec: 1.05, maxScore: 600 },
   nose: { maxPerSec: 130, maxScore: 20000 }, button: { maxPerSec: 3, maxScore: 60 },
 };
+const PAGES: Record<string, { title: string; command: string }> = {
+  'ojisan-stack': { title: 'おじさんを積め！', command: 'おじさんを、落として積め。' }, 'fart-elevator': { title: 'おならエレベーター', command: 'タップで、空まで飛べ。' },
+  'save-the-hair': { title: 'ハゲを守れ！', command: '長押しで、最後の一本を守れ。' }, 'nosehair-pull': { title: '鼻毛を抜け！', command: '長押しして、ベストで離せ。' },
+  'dont-press': { title: '絶対に押すなボタン', command: '絶対に、押すな。' },
+};
 const SOURCES = new Set(['x', 'note', 'instagram', 'tiktok', 'youtube', 'threads']);
 const EVENTS = new Set(['game_start', 'game_over', 'retry', 'game_switch', 'share_click', 'bp_earned', 'character_unlocked', 'visit', 'third_play', 'result_view', 'image_save', 'link_copy', 'challenge_create', 'challenge_visit', 'challenge_play', 'video_save']);
 const MIN_PLAY_MS = 3000, SLACK_MS = 2500;
@@ -20,7 +25,22 @@ const clean = (s: unknown) => String(s ?? '').replace(/[\u0000-\u001f\u007f<>&"'
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url);
-    if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(req);
+    if (!url.pathname.startsWith('/api/')) {
+      // ゲーム専用URLは、SNSのクローラ向けに OGP(タイトル/説明/画像)をゲームごとに差し替える
+      const g = url.pathname.match(/^\/games\/([\w-]+)\/?$/)?.[1], info = g ? PAGES[g] : undefined;
+      if (info && req.method === 'GET') {
+        const base = await env.ASSETS.fetch(new Request(new URL('/', url), req)), img = `${url.origin}/og/${g}.png`, title = `${info.title}｜BAKA ARCADE`;
+        return new HTMLRewriter()
+          .on('title', { element(e) { e.setInnerContent(title); } })
+          .on('meta[property="og:title"]', { element(e) { e.setAttribute('content', title); } })
+          .on('meta[property="og:description"]', { element(e) { e.setAttribute('content', info.command); } })
+          .on('meta[name="description"]', { element(e) { e.setAttribute('content', info.command); } })
+          .on('meta[property="og:image"]', { element(e) { e.setAttribute('content', img); } })
+          .on('head', { element(e) { e.append(`<meta property="og:url" content="${url.origin}/games/${g}"><meta name="twitter:image" content="${img}">`, { html: true }); } })
+          .transform(base);
+      }
+      return env.ASSETS.fetch(req);
+    }
     const stub = env.ARCADE.get(env.ARCADE.idFromName('main'));
     return stub.handle(req.method, url.pathname, url.search, await readBody(req), req.headers.get('cf-connecting-ip') ?? 'x', req.headers.get('authorization') ?? '', env.ADMIN_TOKEN ?? '');
   },

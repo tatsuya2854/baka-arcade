@@ -14,3 +14,6 @@ import { meta as hair } from '../games/hair/meta';
 import { meta as nose } from '../games/nose/meta';
 import { meta as button } from '../games/button/meta';
 export const ALL_META = [stack, fart, hair, nose, button];
+
+export const bySlug = (s: string) => ALL_META.find(m => m.slug === s || m.id === s);
+export const gamePath = (id: string) => `/games/${ALL_META.find(m => m.id === id)?.slug ?? id}`;

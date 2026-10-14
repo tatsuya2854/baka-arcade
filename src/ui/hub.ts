@@ -12,12 +12,12 @@ const fmt = (m: GameMeta, v: number) => m.id === 'hair' ? `${v.toFixed(1)}${m.sc
 
 export function card(m: GameMeta, big = false, badge = ''): string {
   const s = load(), best = s.best[m.id];
-  return `<button class="card ${big ? 'big' : ''}" style="--c:${m.color}" data-play="${m.id}" aria-label="${esc(m.title)}を遊ぶ">
+  return `<a class="card ${big ? 'big' : ''}" style="--c:${m.color}" href="/games/${m.slug}" data-play="${m.id}" aria-label="${esc(m.title)}を遊ぶ">
     ${badge || m.isNew ? `<span class="badge">${badge || 'NEW'}</span>` : ''}
     <div class="thumb"><span>${m.emoji}</span></div>
-    <div class="body"><div class="t">${m.no}. ${esc(m.title)}</div><div class="d">${esc(m.desc)}</div>
-    <div class="bestline">${best != null ? `🏅 自己ベスト ${fmt(m, best)}` : 'まだ未プレイ'}</div>
-    <div class="play">PLAY ▶</div></div></button>`;
+    <div class="body"><div class="t">${esc(m.title)}</div><div class="d">${esc(m.command)}</div>
+    ${best != null ? `<div class="bestline">🏅 ${fmt(m, best)}</div>` : ''}
+    <div class="pbtn">PLAY ▶</div></div></a>`;
 }
 
 export function renderHub(app: HTMLElement) {
@@ -25,6 +25,7 @@ export function renderHub(app: HTMLElement) {
   const played = ALL_META.filter(m => (s.plays[m.id] ?? 0) > 0);
   const popular = ALL_META.find(m => m.flagship)!;
   const others = ALL_META.filter(m => m !== popular);
+  const today = ALL_META[Math.floor(Date.now() / 864e5) % ALL_META.length];
   const reco = [...ALL_META].sort((a, b) => (s.plays[a.id] ?? 0) - (s.plays[b.id] ?? 0))[0];
   const nextUnlock = UNLOCKABLES.filter(u => u.kind === 'skin' && !s.unlocked.includes(u.id))[0];
   app.innerHTML = `<div class="hub">
@@ -34,10 +35,10 @@ export function renderHub(app: HTMLElement) {
     <button class="cta" data-play="${popular.id}">▶ いますぐ遊ぶ</button>
     <div class="muted" style="margin-top:10px">無料・ログイン不要・1プレイ10〜30秒</div></section>
 
-  <h2>人気ゲーム</h2><div class="grid">${card(popular, true, '看板タイトル')}</div>
-  <h2>おすすめ</h2><div class="grid">${card(reco, false, played.length ? 'PICK UP' : 'はじめはコレ')}</div>
-  <h2>新着ゲーム</h2><div class="grid">${card(ALL_META.find(m => m.isNew) ?? others[0])}</div>
-  <h2>全ゲーム一覧</h2><div class="grid">${others.map(m => card(m)).join('')}</div>
+  <h2>今日のゲーム</h2><div class="grid">${card(today, true, 'TODAY')}</div>
+  <h2>人気</h2><div class="row-scroll">${[popular, ...others.filter(m => m !== today)].map(m => card(m)).join('')}</div>
+  <h2>新着</h2><div class="row-scroll">${ALL_META.filter(m => m.isNew).map(m => card(m)).join('') || card(others[others.length - 1])}</div>
+  <h2>すべてのゲーム</h2><div class="grid">${ALL_META.map(m => card(m)).join('')}</div>
 
   <h2>ランキング</h2>
   <div class="tabs" id="rg">${ALL_META.map((m, i) => `<button class="tab ${i === 0 ? 'on' : ''}" data-g="${m.id}">${m.emoji} ${esc(m.title.slice(0, 6))}</button>`).join('')}</div>
@@ -60,7 +61,7 @@ export function renderHub(app: HTMLElement) {
   <div class="ach">${ACHS.map(a => `<div class="achi ${s.achievements.includes(a.id) ? 'got' : ''}"><b>${a.emoji} ${esc(a.name)}</b>${esc(a.desc)}</div>`).join('')}</div>
   <div class="foot">BAKA ARCADE — 計測は匿名・軽量（個人情報は取得しません）。<br>広告は現在表示していません。スコアはサーバー側で検証されます。</div></div>`;
 
-  app.querySelectorAll<HTMLElement>('[data-play]').forEach(b => b.addEventListener('click', () => { audio.unlock(); audio.sfx('tap'); go('/play/' + b.dataset.play); }));
+  app.querySelectorAll<HTMLElement>('[data-play]').forEach(b => b.addEventListener('click', e => { e.preventDefault(); audio.unlock(); audio.sfx('tap'); go('/play/' + b.dataset.play); }));
   app.querySelector('#mute')!.addEventListener('click', e => { audio.setMuted(!audio.muted); (e.currentTarget as HTMLElement).textContent = audio.muted ? '🔇' : '🔊'; });
   app.querySelectorAll<HTMLElement>('[data-skin]').forEach(b => b.addEventListener('click', () => {
     const id = b.dataset.skin!; if (!load().unlocked.includes(id)) return; mutate(x => { x.selectedSkin = id; }); renderHub(app);

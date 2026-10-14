@@ -11,6 +11,7 @@ import { openX, openLine, webShare, saveImage } from '../core/share';
 import { register } from '../core/codex';
 import { selfUrl, verifiedUrl, type Challenge } from '../core/challenge';
 import { card } from './hub';
+import { renderStart } from './start';
 import { rankOf, RANK_COLOR } from '../core/rank';
 import { fetchRareStat, rarityText } from '../core/rarity';
 import { genVariants } from '../core/post';
@@ -29,7 +30,8 @@ export function renderPlay(app: HTMLElement, id: string, challenge?: Challenge):
   let inst: GameInstance | null = null, alive = true, runToken = 0, startedAt = 0, hasStarted = false, raf = 0;
   app.querySelector('#back')!.addEventListener('click', () => go('/'));
   app.querySelector('#mute')!.addEventListener('click', e => { audio.setMuted(!audio.muted); (e.currentTarget as HTMLElement).textContent = audio.muted ? '🔇' : '🔊'; });
-  const teardown = () => { runToken++; cancelAnimationFrame(raf); try { inst?.destroy(); } catch (e) { console.warn(e); } inst = null; audio.stopBgm(); root.innerHTML = ''; };
+  let stopDemo: (() => void) | null = null;
+  const teardown = () => { stopDemo?.(); runToken++; cancelAnimationFrame(raf); try { inst?.destroy(); } catch (e) { console.warn(e); } inst = null; audio.stopBgm(); root.innerHTML = ''; };
   const fmtScore = (v: number) => meta.id === 'hair' ? v.toFixed(1) : String(Math.round(v));
 
   async function launch(isRetry: boolean) {
@@ -46,11 +48,9 @@ export function renderPlay(app: HTMLElement, id: string, challenge?: Challenge):
   }
 
   function intro() {
-    layer.innerHTML = `<div class="ov" style="--c:${meta!.color}"><div style="font-size:72px">${meta!.emoji}</div><h3 style="color:${meta!.color}">${esc(meta!.title)}</h3>
-      ${challenge ? `<div class="chip bp" style="font-size:16px">⚔️ ${esc(challenge.nick)}さんからの挑戦状：${fmtScore(challenge.score)}${meta!.scoreUnit} を超えろ！<br><span class="muted">${challenge.verified ? '✅ サーバー検証済みの記録' : '⚠️ 自己申告の記録（未検証）'}</span></div>` : ''}
-      <div class="how">${esc(meta!.howto)}</div><div class="muted">${esc(meta!.desc)}</div>
-      <button class="cta" id="start">▶ START</button><div class="muted">${audio.muted ? '🔇 ミュート中' : '🔊 音が出ます'}</div></div>`;
-    layer.querySelector('#start')!.addEventListener('click', () => { audio.unlock(); audio.sfx('ok'); launch(false); });
+    stopDemo?.();
+    const chal = challenge ? `⚔️ ${esc(challenge.nick)}さんの挑戦状：${fmtScore(challenge.score)}${meta!.scoreUnit}を超えろ（${challenge.verified ? '✅検証済み' : '⚠️自己申告'}）` : undefined;
+    stopDemo = renderStart(layer, meta!, { muted: audio.muted, challenge: chal, onStart: () => { stopDemo?.(); stopDemo = null; audio.unlock(); audio.sfx('ok'); launch(false); } });
   }
 
   function onFinish(r0: GameResult) {
@@ -137,7 +137,7 @@ export function renderPlay(app: HTMLElement, id: string, challenge?: Challenge):
     $('#sx2').addEventListener('click', () => { track('share_click', { via: 'x', game: m.id, primary: true }); openX(ptext(), shareUrl()); msg('Xの投稿画面を開きました。画像は「他の共有方法」から保存して添付できます'); });
     $('#retry').addEventListener('click', () => { track('retry', { game: m.id }); audio.sfx('ok'); launch(true); });
     $('#home').addEventListener('click', () => go('/'));
-    layer.querySelectorAll<HTMLElement>('[data-play]').forEach(b => b.addEventListener('click', () => { track('game_switch', { from: m.id, to: b.dataset.play! }); go('/play/' + b.dataset.play); }));
+    layer.querySelectorAll<HTMLElement>('[data-play]').forEach(b => b.addEventListener('click', e => { e.preventDefault(); track('game_switch', { from: m.id, to: b.dataset.play! }); go('/play/' + b.dataset.play); }));
     $('#sv').addEventListener('click', () => { variant++; $<HTMLTextAreaElement>('#ptext').value = textFor(); });
     $('#fmts').addEventListener('click', e => { const t = (e.target as HTMLElement).closest<HTMLElement>('[data-f]'); if (!t) return; fmt = t.dataset.f as Fmt; layer.querySelectorAll('#fmts .tab').forEach(x => x.classList.toggle('on', x === t)); });
     // ※「押下」は共有“開始”の計測であり、実際の投稿完了ではない

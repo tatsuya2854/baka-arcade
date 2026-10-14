@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 
+const SLUG: Record<string, string> = { stack: 'ojisan-stack', fart: 'fart-elevator', hair: 'save-the-hair', nose: 'nosehair-pull', button: 'dont-press' };
 const play: Record<string, (p: Page) => Promise<void>> = {
   stack: async p => { for (let i = 0; i < 40 && !(await p.locator('.res').count()); i++) { await p.mouse.click(195, 400); await p.waitForTimeout(700); } },
   fart: async p => { await p.mouse.click(195, 400); },
@@ -19,7 +20,7 @@ test('home renders with all games and no console errors', async ({ page }) => {
 for (const id of Object.keys(play)) {
   test(`play ${id}: start → gameover → result art → retry`, async ({ page }) => {
     const errs: string[] = []; page.on('pageerror', e => errs.push(String(e)));
-    await page.goto('/#/play/' + id); await page.locator('#start').click();
+    await page.goto('/games/' + SLUG[id]); await page.locator('#start').click();
     await page.waitForTimeout(500); await play[id](page);
     await expect(page.locator('.res')).toBeVisible({ timeout: 100_000 }); await page.mouse.up();
     await expect(page.locator('#art')).toBeVisible(); await expect(page.locator('.atitle')).not.toBeEmpty();
@@ -45,6 +46,16 @@ for (const id of Object.keys(play)) {
 
 test('mute persists and challenge url opens game with banner', async ({ page }) => {
   await page.goto('/#/c/g/stack/23/%E3%83%86%E3%82%B9%E3%83%88');
-  await expect(page.locator('.ov')).toContainText('挑戦状'); await expect(page.locator('.ov')).toContainText('自己申告');
+  await expect(page.locator('.start')).toContainText('挑戦状'); await expect(page.locator('.start')).toContainText('自己申告');
   await page.locator('#mute').click(); expect(await page.evaluate(() => localStorage.getItem('baka.mute'))).toBe('1');
+});
+
+test('direct game URL shows start screen immediately (no portal), OGP is per-game', async ({ page, request }) => {
+  await page.goto('/games/ojisan-stack');
+  await expect(page.locator('.cmd')).toHaveText('おじさんを、落として積め。'); await expect(page.locator('#start')).toBeVisible();
+  await expect(page.locator('.hub')).toHaveCount(0); await expect(page.locator('canvas.demo')).toBeVisible();
+  const html = await (await request.get('/games/dont-press')).text();
+  expect(html).toContain('og/dont-press.png'); expect(html).toContain('絶対に押すなボタン｜BAKA ARCADE');
+  await page.locator('#start').click(); await expect(page.locator('#groot canvas').first()).toBeVisible();
+  await page.goto('/'); await expect(page.locator('a.card[href="/games/fart-elevator"]').first()).toBeVisible();
 });

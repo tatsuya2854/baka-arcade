@@ -1,6 +1,6 @@
 import './ui/styles.css';
 import { audio, go } from './core/shared';
-import { GAME_LOADERS as _g } from './core/registry'; void _g;
+import { bySlug } from './core/registry';
 import { renderHub } from './ui/hub';
 import { renderPlay } from './ui/play';
 import { track, setRef, setUtm } from './core/analytics';
@@ -20,11 +20,13 @@ async function route() {
     track('challenge_visit', { game: ch.game, verified: ch.verified }); setRef('challenge');
     cleanup = renderPlay(app, ch.game, ch); return;
   }
-  const m = location.hash.match(/^#\/play\/(\w+)/) ?? location.pathname.match(/^\/games\/(\w+)\/?$/);
-  if (m && GAME_IDS.includes(m[1])) { cleanup = renderPlay(app, m[1]); window.scrollTo(0, 0); }
+  // 旧URL(#/play/<id>)も受け付ける。専用URLは /games/<slug|id>
+  const legacy = location.hash.match(/^#\/play\/(\w+)/)?.[1], slug = location.pathname.match(/^\/games\/([\w-]+)\/?$/)?.[1];
+  const gm = bySlug(legacy ?? slug ?? '');
+  if (gm && GAME_IDS.includes(gm.id)) { cleanup = renderPlay(app, gm.id); window.scrollTo(0, 0); }
   else { renderHub(app); }
 }
-addEventListener('hashchange', route);
+addEventListener('hashchange', route); addEventListener('popstate', route); addEventListener('routechange', route);
 addEventListener('pointerdown', () => audio.unlock(), { capture: true });
 // iOS Safari: ダブルタップ拡大・ピンチを抑止
 document.addEventListener('gesture' + 'start', e => e.preventDefault());
@@ -36,5 +38,5 @@ const q = new URLSearchParams(location.search), ref = q.get('r') === 's' ? 'shar
 const utm = { src: q.get('utm_source') ?? '', cp: q.get('utm_campaign') ?? '', ct: q.get('utm_content') ?? '' };
 if (utm.src) setUtm(utm);
 if (ref || utm.src) { if (ref) setRef(ref); history.replaceState(null, '', location.pathname + location.hash); }
-track('visit', { returning: load().history.length > 0, ref, game: location.pathname.match(/^\/games\/(\w+)/)?.[1] ?? '' });
+track('visit', { returning: load().history.length > 0, ref, game: bySlug(location.pathname.match(/^\/games\/([\w-]+)/)?.[1] ?? '')?.id ?? '' });
 route();
