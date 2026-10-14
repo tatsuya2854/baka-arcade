@@ -1,5 +1,384 @@
-import type { GameModule } from '../../core/types';
+import type { GameModule, GameContext } from '../../core/types';
 import { meta } from './meta';
-// TODO: 担当エージェントが実装する（スタブ）
-const mod: GameModule = { meta, start(ctx) { ctx.root.textContent = 'stub'; return { destroy() { ctx.root.textContent = ''; } }; } };
+import { stageCfg, JUDGE, POINTS, COMBO, STAGE_BONUS, SPECIAL_MULT, LIVES, MIN_PULL, REACT_MS, BGM, type StageCfg } from './config';
+
+type Grade = 'PERFECT' | 'GREAT' | 'OK' | 'MISS';
+type Phase = 'idle' | 'pull' | 'react' | 'over';
+interface Part { x: number; y: number; vx: number; vy: number; life: number; max: number; col: string; sz: number; rot: number; tear?: boolean }
+
+const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
+const GRADE_COL: Record<Grade, string> = { PERFECT: '#ffe14d', GREAT: '#5dffb0', OK: '#6fc3ff', MISS: '#ff5470' };
+
+/** 押下時間→ゲージ位置（決定論的） */
+export function gaugeAt(c: StageCfg, holdT: number): number {
+  const u = holdT * c.speed;
+  if (c.pingpong) { const m = u % 2; return m <= 1 ? m : 2 - m; }
+  return Math.pow(Math.min(u, 1.5), c.accel);
+}
+export function zoneAt(c: StageCfg, holdT: number): number {
+  const z = c.zoneC + c.moveAmp * Math.sin(holdT * c.moveFreq);
+  return clamp(z, c.zoneW + 0.03, 1 - c.zoneW - 0.02);
+}
+
+const mod: GameModule = {
+  meta,
+  start(ctx: GameContext) {
+    const root = ctx.root, audio = ctx.audio;
+    const cv = document.createElement('canvas');
+    cv.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block;user-select:none;-webkit-user-select:none';
+    root.appendChild(cv);
+    const g = cv.getContext('2d')!;
+    let W = 0, H = 0, dpr = 1;
+    const resize = () => {
+      dpr = Math.min(window.devicePixelRatio || 1, 2); W = root.clientWidth || window.innerWidth; H = root.clientHeight || window.innerHeight;
+      cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    };
+    resize();
+    window.addEventListener('resize', resize);
+
+    // ---- 状態 ----
+    let phase: Phase = 'idle', stage = 1, lives = LIVES, score = 0, combo = 0, plucked = 0;
+    let cfg = stageCfg(stage), holdT = 0, gauge = 0, zone = cfg.zoneC;
+    let startedFlag = false, startTime = 0, finished = false, destroyed = false;
+    let reactT = 0, reactOk = false, reactGrade: Grade = 'MISS', reactKind: 'pluck' | 'early' | 'snap' = 'pluck', reactG = 0, reactMsg = '';
+    let gainedPts = 0, popT = 0, shakeT = 0, flash = 0, time = 0, hint = 1, lastShownGauge = 0;
+    let stageIntro = 1.2;
+    const parts: Part[] = [];
+    let tip = { x: 0, y: 0, vx: 0, vy: 0, rot: 0 }; // 抜けた毛の飛行
+    let overTimer = 0;
+
+    const pressHold = () => {
+      if (finished || destroyed) return;
+      audio.unlock();
+      if (!startedFlag) { startedFlag = true; startTime = performance.now(); ctx.started(); audio.startBgm(BGM.kind, BGM.tempo); }
+      if (phase !== 'idle') return;
+      phase = 'pull'; holdT = 0; hint = 0; audio.sfx('tap');
+    };
+    const release = () => {
+      if (phase !== 'pull') return;
+      judge(false);
+    };
+
+    function judge(snapped: boolean) {
+      const gg = gaugeAt(cfg, holdT), z = zoneAt(cfg, holdT);
+      reactG = gg; phase = 'react'; reactT = 0; popT = 0;
+      let grade: Grade = 'MISS';
+      if (!snapped && gg >= MIN_PULL) {
+        const r = Math.abs(gg - z) / cfg.zoneW;
+        grade = r <= JUDGE.perfect ? 'PERFECT' : r <= JUDGE.great ? 'GREAT' : r <= JUDGE.ok ? 'OK' : 'MISS';
+      }
+      reactGrade = grade;
+      if (grade !== 'MISS') {
+        reactOk = true; reactKind = 'pluck'; combo++; plucked++;
+        const mult = 1 + Math.min(combo - 1, COMBO.cap) * COMBO.step;
+        gainedPts = Math.round((POINTS[grade] * (cfg.special ? SPECIAL_MULT : 1) + stage * STAGE_BONUS) * mult);
+        score += gainedPts; reactMsg = grade;
+        audio.sfx('pop'); setTimeout(() => !destroyed && audio.sfx(combo >= 3 || grade === 'PERFECT' ? 'combo' : 'ok'), 90);
+        shakeT = 0.35; flash = grade === 'PERFECT' ? 1 : 0.6;
+        const p = tipPos(reactG, 0);
+        tip = { x: p.x, y: p.y, vx: -120, vy: -520, rot: 0 };
+        confetti(p.x, p.y, grade === 'PERFECT' ? 70 : 40);
+      } else {
+        reactOk = false; combo = 0; lives--; gainedPts = 0;
+        reactKind = snapped || gg > z ? 'snap' : 'early';
+        if (gg < MIN_PULL) reactKind = 'early';
+        reactMsg = snapped ? '切れた！' : gg < MIN_PULL ? 'すっぽ抜け' : gg < z ? '早すぎ！' : '遅すぎ！';
+        audio.sfx('ng'); setTimeout(() => !destroyed && audio.sfx('boing'), 120);
+        shakeT = 0.4;
+      }
+    }
+
+    function nextStage() {
+      if (lives <= 0) { phase = 'over'; overTimer = 0; audio.sfx('gameover'); audio.stopBgm(); return; }
+      if (reactOk) stage++;
+      cfg = stageCfg(stage); phase = 'idle'; holdT = 0; gauge = 0; zone = cfg.zoneC; stageIntro = 1.4;
+    }
+
+    function endGame() {
+      if (finished) return; finished = true;
+      ctx.finish({ score, scoreText: `${score}点`, shareText: `鼻毛を${plucked}本抜いて${score}点！`, durationMs: Math.round(performance.now() - startTime), detail: `ステージ${stage} / ${plucked}本` });
+    }
+
+    // ---- 顔の幾何 ----
+    function geom() {
+      const hx = W / 2, hy = H * 0.4, rx = Math.min(W * 0.46, H * 0.27), ry = rx * 1.15;
+      const nr = rx * 0.24, nx = hx, ny = hy + ry * 0.2;
+      return { hx, hy, rx, ry, nr, nx, ny, rootX: nx - nr * 0.3, rootY: ny + nr * 0.5 };
+    }
+    /** 毛の先端(つまむ手)の位置。gg=ゲージ, back=戻りスプリング用の長さ補正 */
+    function tipPos(gg: number, _t: number, lenOverride?: number) {
+      const G = geom();
+      const Lmin = G.ry * 0.5, Lmax = H * 0.5 - G.rootY + G.ry * 0.6 + (cfg.special ? 0 : 0);
+      const L = lenOverride ?? (Lmin + (Lmax - Lmin) * gg);
+      const sway = Math.sin(time * 3) * 4 * (1 - gg);
+      return { x: G.rootX + gg * 14 + sway, y: G.rootY + L, L };
+    }
+
+    // ---- パーティクル ----
+    function confetti(x: number, y: number, n: number) {
+      const cols = ['#ff5470', '#ffe14d', '#5dffb0', '#6fc3ff', '#d58bff', '#ffb02e'];
+      for (let i = 0; i < n; i++) { const a = Math.random() * 6.283, s = 150 + Math.random() * 450; parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 250, life: 1.6, max: 1.6, col: cols[i % cols.length], sz: 5 + Math.random() * 6, rot: Math.random() * 6 }); }
+    }
+
+    // ---- 描画 ----
+    function face(expr: number, shk: number, pullG: number, noseStretch: number, hair: { tx: number; ty: number; L: number } | null, nosePain: number, rel = 0) {
+      const G = geom();
+      g.save();
+      const tilt = pullG * 0.06 * Math.sin(1) + (reactOk && phase === 'react' ? Math.sin(reactT * 14) * 0.05 * Math.max(0, 1 - reactT) : 0);
+      g.translate(G.hx, G.hy); g.rotate(tilt); g.translate(-G.hx, -G.hy);
+      // 首・肩
+      g.fillStyle = '#e9a97a'; g.fillRect(G.hx - G.rx * 0.45, G.hy + G.ry * 0.7, G.rx * 0.9, G.ry * 0.9);
+      g.fillStyle = '#4aa3ff'; g.beginPath(); g.ellipse(G.hx, G.hy + G.ry * 1.75, G.rx * 1.3, G.ry * 0.6, 0, Math.PI, 0); g.fill();
+      // 頭
+      const stretchY = 1 + pullG * 0.05 + (rel > 0 ? 0 : 0);
+      g.save(); g.translate(G.hx, G.hy); g.scale(1 + pullG * 0.02, stretchY);
+      const sg = g.createRadialGradient(-G.rx * 0.2, -G.ry * 0.3, G.rx * 0.2, 0, 0, G.rx * 1.1);
+      const red = clamp(pullG * 0.6 + nosePain * 0.3, 0, 0.8);
+      sg.addColorStop(0, `rgb(${246},${Math.round(201 - 70 * red)},${Math.round(160 - 90 * red)})`); sg.addColorStop(1, `rgb(${222},${Math.round(150 - 50 * red)},${Math.round(110 - 50 * red)})`);
+      g.fillStyle = sg; g.strokeStyle = '#6b3b22'; g.lineWidth = 5;
+      g.beginPath(); g.ellipse(0, 0, G.rx, G.ry, 0, 0, 7); g.fill(); g.stroke();
+      // 耳
+      for (const s of [-1, 1]) { g.fillStyle = '#eeb48a'; g.beginPath(); g.ellipse(s * G.rx * 0.99, G.ry * 0.02, G.rx * 0.1, G.ry * 0.16, 0, 0, 7); g.fill(); g.stroke(); }
+      g.restore();
+      // 薄い頭髪
+      g.strokeStyle = '#3b2a20'; g.lineWidth = 3; g.lineCap = 'round';
+      for (let i = -3; i <= 3; i++) { g.beginPath(); const x0 = G.hx + i * G.rx * 0.13; g.moveTo(x0, G.hy - G.ry * 0.97 + Math.abs(i) * 6); g.quadraticCurveTo(x0 + 6, G.hy - G.ry * 1.12, x0 + 14 * (i < 0 ? -1 : 1) * 0.5, G.hy - G.ry * 1.05 + Math.abs(i) * 4); g.stroke(); }
+      // 眉
+      const browY = G.hy - G.ry * 0.32 - (expr > 1 ? 8 : 0), ex = G.rx * 0.38, ey = G.hy - G.ry * 0.16;
+      g.strokeStyle = '#3b2a20'; g.lineWidth = 9;
+      for (const s of [-1, 1]) {
+        g.beginPath();
+        const tilt2 = expr === 0 ? 0 : expr === 1 ? -14 : expr === 2 ? -26 : -36;
+        g.moveTo(G.hx + s * (ex + G.rx * 0.2), browY + tilt2 * 0.0 + (expr > 0 ? -tilt2 * 0.0 : 0) + (expr === 0 ? 0 : 0));
+        g.lineTo(G.hx + s * (ex - G.rx * 0.2), browY + (expr === 0 ? -2 : -tilt2 * -0.0) + (expr === 0 ? 0 : (expr + 1) * 6));
+        g.stroke();
+      }
+      // 目
+      const closed = expr === 3 || (rel && reactOk), happy = reactOk && phase === 'react';
+      for (const s of [-1, 1]) {
+        const cx = G.hx + s * ex;
+        if (happy) { g.strokeStyle = '#2b1a10'; g.lineWidth = 7; g.beginPath(); g.arc(cx, ey + 8, G.rx * 0.12, Math.PI * 1.1, Math.PI * 1.9); g.stroke(); }
+        else if (closed) { g.strokeStyle = '#2b1a10'; g.lineWidth = 8; g.beginPath(); g.moveTo(cx - G.rx * 0.14, ey - 6); g.lineTo(cx + G.rx * 0.1 * s, ey + 8); g.moveTo(cx - G.rx * 0.14, ey + 14); g.lineTo(cx + G.rx * 0.1 * s, ey + 2); g.stroke(); }
+        else {
+          const er = G.rx * (expr === 0 ? 0.13 : 0.15);
+          g.fillStyle = '#fff'; g.strokeStyle = '#2b1a10'; g.lineWidth = 4; g.beginPath(); g.ellipse(cx, ey, er, er * (expr >= 1 ? 1.15 : 0.8), 0, 0, 7); g.fill(); g.stroke();
+          g.fillStyle = '#2b1a10'; const px = expr >= 2 ? 0 : (hair ? clamp((hair.tx - G.hx) * 0.02, -3, 3) : 0), py = expr === 0 ? 2 : er * 0.3;
+          g.beginPath(); g.arc(cx + px, ey + py, er * (expr >= 1 ? 0.38 : 0.5), 0, 7); g.fill();
+          if (expr >= 2) { g.fillStyle = 'rgba(120,200,255,.8)'; g.beginPath(); g.ellipse(cx, ey + er * 0.9, er * 0.9, er * 0.35, 0, 0, 7); g.fill(); }
+        }
+        // 涙
+        if ((expr >= 2 && !happy) || (happy && reactGrade !== 'PERFECT' && reactT < 0.9)) {
+          g.fillStyle = '#8fd3ff';
+          for (let k = 0; k < 2; k++) { const f = ((time * 1.4 + k * 0.5 + (s > 0 ? 0.2 : 0)) % 1); g.beginPath(); g.ellipse(cx + s * 4, ey + 20 + f * G.ry * 0.5, 6, 10, 0, 0, 7); g.globalAlpha = 1 - f; g.fill(); g.globalAlpha = 1; }
+        }
+      }
+      // 鼻（引っ張りで伸びる）
+      const nox = noseStretch * G.nr * 0.0, noy = noseStretch * G.nr * 0.55;
+      g.fillStyle = `rgb(${240},${Math.round(160 - 60 * red)},${Math.round(125 - 50 * red)})`; g.strokeStyle = '#6b3b22'; g.lineWidth = 4;
+      g.beginPath(); g.ellipse(G.nx + nox, G.ny + noy * 0.5, G.nr * (1 - noseStretch * 0.12), G.nr * (1.0 + noseStretch * 0.5), 0, 0, 7); g.fill(); g.stroke();
+      // 鼻の穴
+      g.fillStyle = '#4a1f12'; for (const s of [-1, 1]) { g.beginPath(); g.ellipse(G.nx + s * G.nr * 0.42 + nox, G.ny + G.nr * 0.5 + noy, G.nr * 0.2, G.nr * 0.26 * (1 + noseStretch * 0.4), 0, 0, 7); g.fill(); }
+      // 頬の赤み
+      if (red > 0.1) { g.fillStyle = `rgba(255,70,90,${red * 0.45})`; for (const s of [-1, 1]) { g.beginPath(); g.ellipse(G.hx + s * G.rx * 0.6, G.hy + G.ry * 0.12, G.rx * 0.16, G.ry * 0.09, 0, 0, 7); g.fill(); } }
+      // 口
+      const my = G.hy + G.ry * 0.58, mw = G.rx * 0.34;
+      g.strokeStyle = '#4a1f12'; g.fillStyle = '#6b1a1a'; g.lineWidth = 6;
+      if (happy) { g.beginPath(); g.arc(G.hx, my - 14, mw, 0.1, Math.PI - 0.1); g.closePath(); g.fillStyle = '#7a1a22'; g.fill(); g.stroke(); g.fillStyle = '#ff7a8a'; g.beginPath(); g.ellipse(G.hx, my + mw * 0.55, mw * 0.5, mw * 0.25, 0, 0, Math.PI); g.fill(); }
+      else if (expr === 0) { g.beginPath(); g.arc(G.hx, my - 10, mw * 0.8, 0.25, Math.PI - 0.25); g.stroke(); }
+      else if (expr === 1) { g.beginPath(); g.moveTo(G.hx - mw * 0.8, my); g.quadraticCurveTo(G.hx, my - 14, G.hx + mw * 0.8, my); g.stroke(); }
+      else { const o = expr === 3 ? 1.2 : 0.8; g.beginPath(); g.ellipse(G.hx, my + 4, mw * 0.5 * o, mw * (0.35 + (expr - 1) * 0.15) * o + Math.sin(time * 30) * 2 * (expr === 3 ? 1 : 0), 0, 0, 7); g.fill(); g.stroke(); }
+      // 汗
+      if (expr >= 1 && !happy) { g.fillStyle = '#8fd3ff'; g.beginPath(); g.ellipse(G.hx + G.rx * 0.8, G.hy - G.ry * 0.5 + (time * 60 % 30), 7, 12, 0, 0, 7); g.fill(); }
+      g.restore();
+    }
+
+    function drawHair(gg: number, kind: 'hold' | 'spring' | 'snap' | 'none', sp = 0) {
+      const G = geom();
+      if (kind === 'none') { // 抜けた後: 穴のみ
+        return;
+      }
+      let tp = tipPos(gg, 0);
+      if (kind === 'spring') {
+        // ビヨーンと弾んで元の長さへ（減衰振動）
+        const base = tipPos(0, 0).L, from = tipPos(gg, 0).L, k = Math.exp(-5 * sp) * Math.cos(sp * 22);
+        tp = tipPos(0, 0, base + (from - base) * k);
+      }
+      if (kind === 'snap') { const L0 = tipPos(0, 0).L; tp = tipPos(0, 0, L0 * 0.5); }
+      const rx0 = G.rootX, ry0 = G.rootY, L = tp.y - ry0;
+      const amp = (cfg.special ? 16 : 10) * (kind === 'hold' ? 1 - gg * 0.8 : kind === 'spring' ? 1 + Math.sin(sp * 30) * 0.5 : 1);
+      const drawStrand = (yTo: number, xTo: number, width: number, col: string) => {
+        g.strokeStyle = col; g.lineWidth = width; g.lineCap = 'round'; g.beginPath(); g.moveTo(rx0, ry0);
+        const n = 40, Ls = yTo - ry0;
+        for (let i = 1; i <= n; i++) { const f = i / n; const w = Math.sin(f * cfg.waves * Math.PI * 2 + time * 2) * amp * f * (1 - f * 0.2); g.lineTo(rx0 + (xTo - rx0) * f + w, ry0 + Ls * f); }
+        g.stroke();
+      };
+      drawStrand(tp.y, tp.x, 5, '#1e140e');
+      if (kind === 'hold') {
+        // 指（つまむ手）
+        g.fillStyle = '#f6c9a0'; g.strokeStyle = '#6b3b22'; g.lineWidth = 4;
+        g.beginPath(); g.ellipse(tp.x, tp.y + 18, 22, 34, 0, 0, 7); g.fill(); g.stroke();
+        g.beginPath(); g.ellipse(tp.x - 14, tp.y - 6, 9, 20, -0.3, 0, 7); g.fill(); g.stroke();
+        g.beginPath(); g.ellipse(tp.x + 14, tp.y - 6, 9, 20, 0.3, 0, 7); g.fill(); g.stroke();
+      }
+      void L;
+    }
+
+    function exprOf(gg: number): number { return gg < 0.3 ? 0 : gg < 0.6 ? 1 : gg < 0.85 ? 2 : 3; }
+
+    function drawGauge(vis: number) {
+      const bw = W * 0.86, bh = 38, bx = (W - bw) / 2, by = H - 120;
+      g.save();
+      g.fillStyle = 'rgba(255,255,255,.1)'; g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = 3;
+      g.beginPath(); g.roundRect(bx, by, bw, bh, 19); g.fill(); g.stroke();
+      // ゾーン
+      if (vis > 0.01) {
+        const zx = bx + zone * bw, zw = cfg.zoneW * bw;
+        g.globalAlpha = vis;
+        const gr = g.createLinearGradient(zx - zw, 0, zx + zw, 0); gr.addColorStop(0, 'rgba(93,255,176,.4)'); gr.addColorStop(0.5, 'rgba(255,225,77,.95)'); gr.addColorStop(1, 'rgba(93,255,176,.4)');
+        g.fillStyle = gr; g.fillRect(zx - zw, by + 3, zw * 2, bh - 6);
+        g.strokeStyle = '#fff'; g.lineWidth = 2; g.beginPath(); g.moveTo(zx, by); g.lineTo(zx, by + bh); g.stroke();
+        g.globalAlpha = 1;
+      } else if (cfg.hideAt !== null) { g.fillStyle = 'rgba(255,255,255,.7)'; g.font = '900 20px sans-serif'; g.textAlign = 'center'; g.fillText('？？？', bx + bw / 2, by + 26); }
+      // 針
+      const mx = bx + lastShownGauge * bw;
+      g.fillStyle = '#ff5470'; g.strokeStyle = '#fff'; g.lineWidth = 3;
+      g.beginPath(); g.moveTo(mx, by - 6); g.lineTo(mx - 10, by - 20); g.lineTo(mx + 10, by - 20); g.closePath(); g.fill(); g.stroke();
+      g.fillRect(mx - 3, by - 4, 6, bh + 8);
+      g.restore();
+    }
+
+    function text(s: string, x: number, y: number, size: number, col: string, a = 1, rot = 0) {
+      g.save(); g.translate(x, y); g.rotate(rot); g.globalAlpha = a; g.font = `900 ${size}px "Hiragino Sans", "Noto Sans JP", sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.lineWidth = size * 0.18; g.strokeStyle = '#1a1030'; g.lineJoin = 'round'; g.strokeText(s, 0, 0); g.fillStyle = col; g.fillText(s, 0, 0); g.restore();
+    }
+
+    function render() {
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const bg = g.createRadialGradient(W / 2, H * 0.4, 20, W / 2, H * 0.4, H * 0.8);
+      bg.addColorStop(0, '#ffcf8a'); bg.addColorStop(1, '#5a2a6a'); g.fillStyle = bg; g.fillRect(0, 0, W, H);
+      // 集中線
+      const pullG = phase === 'pull' ? gauge : 0;
+      if (pullG > 0.4) { g.save(); g.strokeStyle = `rgba(255,255,255,${(pullG - 0.4) * 0.5})`; g.lineWidth = 3; const G = geom(); for (let i = 0; i < 24; i++) { const a = i / 24 * 6.283 + time * 0.2; g.beginPath(); g.moveTo(G.hx + Math.cos(a) * W * 0.6, G.hy + Math.sin(a) * W * 0.6); g.lineTo(G.hx + Math.cos(a) * W * 1.1, G.hy + Math.sin(a) * W * 1.1); g.stroke(); } g.restore(); }
+      // ズーム＆ぷるぷる
+      const G = geom();
+      const zoom = 1 + (phase === 'pull' ? gauge * 0.1 : 0) + (phase === 'react' && reactOk ? Math.max(0, 0.15 - reactT * 0.2) : 0);
+      const shk = (phase === 'pull' ? gauge * gauge * 7 : 0) + shakeT * 14;
+      g.save();
+      g.translate(G.nx + (Math.random() - 0.5) * shk, G.ny + (Math.random() - 0.5) * shk); g.scale(zoom, zoom); g.translate(-G.nx, -G.ny);
+
+      if (phase === 'pull') {
+        const hh = tipPos(gauge, 0);
+        face(exprOf(gauge), shk, gauge, gauge, { tx: hh.x, ty: hh.y, L: hh.L }, gauge);
+        drawHair(gauge, 'hold');
+      } else if (phase === 'react') {
+        if (reactOk) {
+          face(0, shk, 0, 0, null, 0.8, 1);
+          // 抜けた毛と手が飛ぶ
+          g.save(); g.translate(tip.x, tip.y); g.rotate(tip.rot);
+          g.strokeStyle = '#1e140e'; g.lineWidth = 5; g.lineCap = 'round'; g.beginPath(); g.moveTo(0, 0); for (let i = 1; i <= 20; i++) g.lineTo(Math.sin(i * 0.8 + time * 8) * 8, i * 10); g.stroke();
+          g.fillStyle = '#f6c9a0'; g.strokeStyle = '#6b3b22'; g.lineWidth = 4; g.beginPath(); g.ellipse(0, -10, 24, 32, 0, 0, 7); g.fill(); g.stroke(); g.restore();
+          // スポッ！ 鼻から出る放射
+          if (reactT < 0.35) { g.strokeStyle = `rgba(255,255,255,${1 - reactT * 3})`; g.lineWidth = 6; for (let i = 0; i < 10; i++) { const a = i / 10 * 6.283; g.beginPath(); g.moveTo(G.rootX + Math.cos(a) * 30, G.rootY + Math.sin(a) * 30); g.lineTo(G.rootX + Math.cos(a) * (60 + reactT * 300), G.rootY + Math.sin(a) * (60 + reactT * 300)); g.stroke(); } }
+        } else {
+          const ex = reactKind === 'snap' ? 3 : 2;
+          face(ex, shk, 0, Math.max(0, 0.6 - reactT) , null, 1);
+          if (reactKind === 'snap') drawHair(reactG, 'snap'); else drawHair(reactG, 'spring', reactT);
+          if (reactKind === 'snap') { // 切れた毛の先がひらひら
+            const base = tipPos(0, 0).L * 0.5; g.save(); g.translate(G.rootX + 20 + reactT * 90, G.rootY + base + reactT * 260 + reactT * reactT * 300); g.rotate(reactT * 6);
+            g.strokeStyle = '#1e140e'; g.lineWidth = 5; g.beginPath(); g.moveTo(0, 0); for (let i = 1; i <= 16; i++) g.lineTo(Math.sin(i) * 7, i * 9); g.stroke(); g.restore();
+          }
+        }
+      } else {
+        // idle / over
+        const lazy = phase === 'over' ? 3 : 0;
+        face(phase === 'over' ? 3 : 0, 0, 0, 0, null, 0);
+        if (phase !== 'over') drawHair(0, 'hold');
+        void lazy;
+      }
+      g.restore();
+
+      // パーティクル
+      for (const p of parts) { g.save(); g.globalAlpha = clamp(p.life / p.max * 1.5, 0, 1); g.translate(p.x, p.y); g.rotate(p.rot); g.fillStyle = p.col; g.fillRect(-p.sz / 2, -p.sz / 3, p.sz, p.sz * 0.66); g.restore(); }
+      if (flash > 0) { g.fillStyle = `rgba(255,255,255,${flash * 0.5})`; g.fillRect(0, 0, W, H); }
+
+      // HUD
+      text(`${score}点`, W / 2, 48, 42, '#fff');
+      text(`STAGE ${stage}${cfg.special ? ' ★超ロング★' : ''}`, W / 2, 90, 22, cfg.special ? '#ffe14d' : '#ffe9c8');
+      for (let i = 0; i < LIVES; i++) text(i < lives ? '❤' : '♡', 34 + i * 34, 40, 30, i < lives ? '#ff5470' : '#aaa');
+      if (combo >= 2) text(`${combo} COMBO`, W - 76, 40, 24, '#5dffb0');
+
+      // ゲージ
+      let vis = 1;
+      if (cfg.hideAt !== null && phase === 'pull') vis = clamp(1 - (gauge - cfg.hideAt) / 0.12, 0, 1);
+      if (phase === 'react') vis = 1;
+      if (phase === 'idle' && cfg.hideAt !== null) vis = 1;
+      if (phase !== 'over') drawGauge(vis);
+      // ステップ案内
+      if (phase === 'idle') {
+        const pulse = 1 + Math.sin(time * 6) * 0.05;
+        text(hint ? '長押しで引っ張る！' : '長押し！', W / 2, H - 200, 34 * pulse, '#fff');
+        text('黄色いゾーンで離せ！', W / 2, H - 164, 22, '#ffe14d');
+        if (stageIntro > 0 && stage > 1) text(cfg.special ? '超ロング鼻毛！' : cfg.pingpong ? 'ゲージ往復！' : cfg.hideAt !== null ? 'ゾーンが消える！' : cfg.moveAmp > 0 ? 'ゾーンが動く！' : `STAGE ${stage}`, W / 2, H * 0.12 + 60, 36, '#ff9ae0');
+      }
+      // 結果テキスト
+      if (phase === 'react') {
+        const sc = 1 + Math.max(0, 0.6 - popT * 3), a = reactT < 0.9 ? 1 : 1 - (reactT - 0.9) * 5;
+        const col = GRADE_COL[reactGrade];
+        text(reactOk ? reactGrade + '!' : reactMsg, W / 2, H * 0.17, (reactOk ? 64 : 52) * sc, col, a, Math.sin(reactT * 10) * 0.05);
+        if (reactOk) text(`+${gainedPts}`, W / 2, H * 0.17 + 56, 34, '#fff', a);
+        else text('ミス…', W / 2, H * 0.17 + 56, 28, '#fff', a);
+      }
+      if (phase === 'over') {
+        text('もう限界…！', W / 2, H * 0.17, 54, '#ff5470');
+        text(`${plucked}本抜いた`, W / 2, H * 0.17 + 56, 30, '#fff');
+      }
+    }
+
+    // ---- ループ ----
+    let raf = 0, last = performance.now();
+    const loop = (now: number) => {
+      raf = requestAnimationFrame(loop);
+      const dt = Math.min(0.05, (now - last) / 1000); last = now; time += dt; popT += dt;
+      shakeT = Math.max(0, shakeT - dt); flash = Math.max(0, flash - dt * 3); stageIntro = Math.max(0, stageIntro - dt);
+      if (phase === 'pull') {
+        holdT += dt; gauge = gaugeAt(cfg, holdT); zone = zoneAt(cfg, holdT); lastShownGauge = gauge;
+        if ((!cfg.pingpong && holdT * cfg.speed >= 1) || (cfg.pingpong && holdT >= cfg.maxHold)) { gauge = gaugeAt(cfg, holdT); judge(true); }
+      } else if (phase === 'idle') { lastShownGauge = 0; zone = cfg.zoneC; }
+      else if (phase === 'react') {
+        reactT += dt;
+        if (reactOk) { tip.vy += 900 * dt; tip.x += tip.vx * dt; tip.y += tip.vy * dt; tip.rot += dt * 5; }
+        if (reactT * 1000 >= REACT_MS) nextStage();
+      } else if (phase === 'over') { overTimer += dt; if (overTimer > 1.3) endGame(); }
+      for (let i = parts.length - 1; i >= 0; i--) { const p = parts[i]; p.life -= dt; if (p.life <= 0) { parts.splice(i, 1); continue; } p.vy += 700 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += dt * 8; }
+      render();
+    };
+    raf = requestAnimationFrame(loop);
+
+    // ---- 入力 ----
+    const onDown = (e: Event) => { e.preventDefault(); pressHold(); };
+    const onUp = () => release();
+    const onKeyD = (e: KeyboardEvent) => { if (e.code === 'Space' && !e.repeat) { e.preventDefault(); pressHold(); } };
+    const onKeyU = (e: KeyboardEvent) => { if (e.code === 'Space') release(); };
+    cv.addEventListener('pointerdown', onDown);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    window.addEventListener('keydown', onKeyD);
+    window.addEventListener('keyup', onKeyU);
+
+    // テスト用フック（読み取りのみ）
+    (window as any).__nose = { get: () => ({ phase, stage, lives, score, gauge, zone, holdT, zoneW: cfg.zoneW, cfg }) };
+
+    return {
+      destroy() {
+        destroyed = true; cancelAnimationFrame(raf); audio.stopBgm();
+        window.removeEventListener('resize', resize);
+        window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onUp);
+        window.removeEventListener('keydown', onKeyD); window.removeEventListener('keyup', onKeyU);
+        cv.removeEventListener('pointerdown', onDown);
+        delete (window as any).__nose;
+        cv.remove();
+      },
+    };
+  },
+};
 export default mod;

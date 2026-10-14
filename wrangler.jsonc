@@ -1,0 +1,9 @@
+{
+  "name": "baka-arcade",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-09-01",
+  "assets": { "directory": "./dist", "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": ["/api/*"] },
+  "durable_objects": { "bindings": [{ "name": "ARCADE", "class_name": "Arcade" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Arcade"] }],
+  "observability": { "enabled": true }
+}
