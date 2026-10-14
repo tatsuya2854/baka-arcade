@@ -5,7 +5,7 @@ const play: Record<string, (p: Page) => Promise<void>> = {
   fart: async p => { await p.mouse.click(195, 400); },
   hair: async p => { await p.mouse.move(195, 420); await p.mouse.down(); },
   nose: async p => { for (let i = 0; i < 30 && !(await p.locator('.res').count()); i++) { await p.mouse.move(195, 420); await p.mouse.down(); await p.waitForTimeout(60); await p.mouse.up(); await p.waitForTimeout(900); } },
-  button: async p => { for (let i = 0; i < 400 && !(await p.locator('.res').count()); i++) { await p.mouse.click(195, 422); await p.waitForTimeout(190); } },
+  button: async p => { for (let i = 0; i < 400 && !(await p.locator('.res').count()); i++) { const v = p.viewportSize()!; await p.mouse.click(v.width / 2, v.height / 2); await p.waitForTimeout(190); } },
 };
 
 test('home renders with all games and no console errors', async ({ page }) => {
