@@ -92,7 +92,7 @@ export class Fart3D {
     // 噴射炎：おじさんの尻の下
     const f = this.flameG; f.visible = visible && jp > 0;
     if (f.visible) {
-      const S = this.S, len = (34 + 70 * jp + Math.random() * 14) * S, w = (9 + jp * 7) * S;
+      const S = this.S, len = (34 + 70 * jp + Math.random() * 14) * S, w = (12 + jp * 8) * S;
       f.position.set(this.X(x), this.Y(y) - h * S * 0.2, -4); f.rotation.z = -rot * 0.6;
       this.flame1.scale.set(w, len, w); this.flame2.scale.set(w * 0.55, len * 0.6, w * 0.55);
     }

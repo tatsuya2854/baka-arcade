@@ -34,7 +34,7 @@ export class View3D implements R3 {
     this.stage.setPlatform(-1e6, 0, false); // おじさん用ステージの土台は使わない
     const dg = domeGeo(), pg = new CylinderGeometry(1.22, 1.3, 0.3, 36), wg = new CylinderGeometry(1.04, 1.04, 0.02, 32), bg = new CylinderGeometry(1.0, 1.04, 0.16, 20);
     this.geos.push(dg, pg, wg, bg);
-    this.domeMat = new MeshPhongMaterial({ color: 0xff2a2a, shininess: 110, specular: 0xffffff });
+    this.domeMat = new MeshPhongMaterial({ color: 0xff2a2a, shininess: 70, specular: 0x777777 });
     this.plateMat = new MeshPhongMaterial({ color: 0x8a909c, shininess: 60, specular: 0x9999aa });
     this.wellMat = new MeshPhongMaterial({ color: 0x14161a, shininess: 5 });
     this.mats.push(this.domeMat, this.plateMat, this.wellMat);
@@ -44,7 +44,7 @@ export class View3D implements R3 {
     this.tilt.rotation.x = TILT; this.tilt.add(this.art); this.squash.add(this.tilt); this.root.add(this.squash); this.root.rotation.order = 'ZXY';
     this.world.add(this.root);
     // 増殖ボタン用 InstancedMesh
-    const miniMat = new MeshPhongMaterial({ color: 0xffffff, shininess: 110, specular: 0xffffff }), baseMat = new MeshPhongMaterial({ color: 0x4a1010, shininess: 10 });
+    const miniMat = new MeshPhongMaterial({ color: 0xffffff, shininess: 70, specular: 0x777777 }), baseMat = new MeshPhongMaterial({ color: 0x4a1010, shininess: 10 });
     this.mats.push(miniMat, baseMat);
     this.miniDome = new InstancedMesh(dg, miniMat, MAX_MINI); this.miniBase = new InstancedMesh(bg, baseMat, MAX_MINI);
     this.miniBase.position.y = 0;

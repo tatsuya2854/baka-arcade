@@ -1,5 +1,6 @@
 import type { GameModule, GameContext, ResultArt } from '../../core/types';
 import { meta } from './meta';
+import { NoseStage3D, newFaceP } from './face3d';
 import { stageCfg, JUDGE, POINTS, COMBO, STAGE_BONUS, SPECIAL_MULT, LIVES, MIN_PULL, REACT_MS, BGM, HAIR, TITLE, type StageCfg } from './config';
 
 type Grade = 'PERFECT' | 'GREAT' | 'OK' | 'MISS';
@@ -81,12 +82,25 @@ const mod: GameModule = {
     const root = ctx.root, audio = ctx.audio;
     const cv = document.createElement('canvas');
     cv.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block;user-select:none;-webkit-user-select:none';
-    root.appendChild(cv);
-    const g = cv.getContext('2d')!;
+    const gTop = cv.getContext('2d')!;
+    let g = gTop;
     let W = 0, H = 0, dpr = 1;
+    // 3D描画（WebGL）。失敗したら従来の2D描画。重ね順: 背景2D → three → 前景2D(演出+HUD)
+    let stage3d: NoseStage3D | null = null, bgCv: HTMLCanvasElement | null = null, gBg: CanvasRenderingContext2D | null = null, use3d = false;
+    const fp = newFaceP();
+    const disable3d = () => { use3d = false; if (bgCv) bgCv.style.display = 'none'; if (stage3d) stage3d.canvas.style.display = 'none'; g = gTop; };
+    try {
+      stage3d = new NoseStage3D(() => disable3d());
+      bgCv = document.createElement('canvas'); bgCv.style.cssText = cv.style.cssText; gBg = bgCv.getContext('2d');
+      stage3d.canvas.style.cssText = cv.style.cssText + ';pointer-events:none';
+      if (!gBg) throw new Error('2d');
+      root.append(bgCv, stage3d.canvas, cv); use3d = true;
+    } catch { try { stage3d?.dispose(); } catch { /* ignore */ } stage3d = null; bgCv = null; gBg = null; use3d = false; root.appendChild(cv); }
     const resize = () => {
       dpr = Math.min(window.devicePixelRatio || 1, 2); W = root.clientWidth || window.innerWidth; H = root.clientHeight || window.innerHeight;
       cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+      if (bgCv) { bgCv.width = cv.width; bgCv.height = cv.height; }
+      stage3d?.resize(W, H, dpr);
     };
     resize();
     window.addEventListener('resize', resize);
@@ -344,21 +358,59 @@ const mod: GameModule = {
       g.lineWidth = size * 0.18; g.strokeStyle = '#1a1030'; g.lineJoin = 'round'; g.strokeText(s, 0, 0); g.fillStyle = col; g.fillText(s, 0, 0); g.restore();
     }
 
+    /** 3D顔の状態を2D版と同じロジックから組み立てる（オブジェクト再利用） */
+    function setup3d(G: ReturnType<typeof geom>, zoom: number, sx: number, sy: number) {
+      const p = fp; p.W = W; p.H = H; p.hx = G.hx; p.hy = G.hy; p.rx = G.rx; p.ry = G.ry; p.nr = G.nr; p.nx = G.nx; p.ny = G.ny; p.time = time;
+      p.zoom = zoom; p.ox = sx; p.oy = sy; p.hairKind = 0; p.fly = 0; p.hand = true; p.waves = cfg.waves; p.tilt = 0; p.flick = 0; p.lookX = 0;
+      const tiltOf = (pg: number) => pg * 0.06 * Math.sin(1) + (reactOk && phase === 'react' ? Math.sin(reactT * 14) * 0.05 * Math.max(0, 1 - reactT) : 0);
+      if (phase === 'pull') {
+        const hh = tipPos(gauge, 0), ex = exprOf(gauge);
+        p.expr = ex; p.pull = gauge; p.stretch = gauge; p.red = clamp(gauge * 0.6 + gauge * 0.3, 0, 0.8); p.happy = false; p.tears = ex >= 2; p.sweat = ex >= 1;
+        p.tilt = tiltOf(gauge); p.lookX = clamp((hh.x - G.hx) * 0.02, -3, 3); p.flick = Math.sin(time * 30) * 2 * (ex === 3 ? 1 : 0);
+        p.hairKind = 1; p.tipX = hh.x; p.tipY = hh.y; p.amp = (cfg.special ? 16 : 10) * (1 - gauge * 0.8);
+      } else if (phase === 'react') {
+        if (reactOk) {
+          p.expr = 0; p.pull = 0; p.stretch = 0; p.red = clamp(0.24, 0, 0.8); p.happy = true; p.tears = reactGrade !== 'PERFECT' && reactT < 0.9; p.sweat = false; p.tilt = tiltOf(0);
+          p.fly = 1; p.flyX = tip.x; p.flyY = tip.y; p.flyRot = tip.rot;
+        } else {
+          const ex = reactKind === 'snap' ? 3 : 2, st = Math.max(0, 0.6 - reactT);
+          p.expr = ex; p.pull = 0; p.stretch = st; p.red = clamp(0.3, 0, 0.8); p.happy = false; p.tears = true; p.sweat = true; p.flick = Math.sin(time * 30) * 2 * (ex === 3 ? 1 : 0);
+          let tp = tipPos(0, 0);
+          if (reactKind === 'snap') { tp = tipPos(0, 0, tipPos(0, 0).L * 0.5); p.amp = 10; }
+          else { const base = tipPos(0, 0).L, from = tipPos(reactG, 0).L, k = Math.exp(-5 * reactT) * Math.cos(reactT * 22); tp = tipPos(0, 0, base + (from - base) * k); p.amp = 10 * (1 + Math.sin(reactT * 30) * 0.5); }
+          p.hairKind = 2; p.tipX = tp.x; p.tipY = tp.y;
+          if (reactKind === 'snap') { const base = tipPos(0, 0).L * 0.5; p.fly = 2; p.flyX = G.rootX + 20 + reactT * 90; p.flyY = G.rootY + base + reactT * 260 + reactT * reactT * 300; p.flyRot = reactT * 6; }
+        }
+      } else {
+        const over = phase === 'over';
+        p.expr = over ? 3 : 0; p.pull = 0; p.stretch = 0; p.red = over ? 0.2 : 0; p.happy = false; p.tears = over; p.sweat = over; p.flick = 0;
+        if (!over) { const tp = tipPos(0, 0); p.hairKind = 1; p.hand = false; p.tipX = tp.x; p.tipY = tp.y; p.amp = cfg.special ? 16 : 10; }
+      }
+    }
+
     function render() {
       g.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const bg = g.createRadialGradient(W / 2, H * 0.4, 20, W / 2, H * 0.4, H * 0.8);
-      bg.addColorStop(0, '#ffcf8a'); bg.addColorStop(1, '#5a2a6a'); g.fillStyle = bg; g.fillRect(0, 0, W, H);
+      const gb = use3d && gBg ? gBg : g;
+      if (gb !== g) gb.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const bg = gb.createRadialGradient(W / 2, H * 0.4, 20, W / 2, H * 0.4, H * 0.8);
+      bg.addColorStop(0, '#ffcf8a'); bg.addColorStop(1, '#5a2a6a'); gb.fillStyle = bg; gb.fillRect(0, 0, W, H);
       // 集中線
       const pullG = phase === 'pull' ? gauge : 0;
-      if (pullG > 0.4) { g.save(); g.strokeStyle = `rgba(255,255,255,${(pullG - 0.4) * 0.5})`; g.lineWidth = 3; const G = geom(); for (let i = 0; i < 24; i++) { const a = i / 24 * 6.283 + time * 0.2; g.beginPath(); g.moveTo(G.hx + Math.cos(a) * W * 0.6, G.hy + Math.sin(a) * W * 0.6); g.lineTo(G.hx + Math.cos(a) * W * 1.1, G.hy + Math.sin(a) * W * 1.1); g.stroke(); } g.restore(); }
+      if (pullG > 0.4) { gb.save(); gb.strokeStyle = `rgba(255,255,255,${(pullG - 0.4) * 0.5})`; gb.lineWidth = 3; const G = geom(); for (let i = 0; i < 24; i++) { const a = i / 24 * 6.283 + time * 0.2; gb.beginPath(); gb.moveTo(G.hx + Math.cos(a) * W * 0.6, G.hy + Math.sin(a) * W * 0.6); gb.lineTo(G.hx + Math.cos(a) * W * 1.1, G.hy + Math.sin(a) * W * 1.1); gb.stroke(); } gb.restore(); }
+      if (use3d) g.clearRect(0, 0, W, H);
       // ズーム＆ぷるぷる
       const G = geom();
       const zoom = 1 + (phase === 'pull' ? gauge * 0.1 : 0) + (phase === 'react' && reactOk ? Math.max(0, 0.15 - reactT * 0.2) : 0);
       const shk = (phase === 'pull' ? gauge * gauge * 7 : 0) + shakeT * 14;
+      const shx = (Math.random() - 0.5) * shk, shy = (Math.random() - 0.5) * shk;
       g.save();
-      g.translate(G.nx + (Math.random() - 0.5) * shk, G.ny + (Math.random() - 0.5) * shk); g.scale(zoom, zoom); g.translate(-G.nx, -G.ny);
+      g.translate(G.nx + shx, G.ny + shy); g.scale(zoom, zoom); g.translate(-G.nx, -G.ny);
 
-      if (phase === 'pull') {
+      if (use3d && stage3d) {
+        setup3d(G, zoom, shx, shy); stage3d.update(fp); stage3d.render();
+        // スポッ！ 鼻から出る放射（前景2D）
+        if (phase === 'react' && reactOk && reactT < 0.35) { g.strokeStyle = `rgba(255,255,255,${1 - reactT * 3})`; g.lineWidth = 6; for (let i = 0; i < 10; i++) { const a = i / 10 * 6.283; g.beginPath(); g.moveTo(G.rootX + Math.cos(a) * 30, G.rootY + Math.sin(a) * 30); g.lineTo(G.rootX + Math.cos(a) * (60 + reactT * 300), G.rootY + Math.sin(a) * (60 + reactT * 300)); g.stroke(); } }
+      } else if (phase === 'pull') {
         const hh = tipPos(gauge, 0);
         face(exprOf(gauge), shk, gauge, gauge, { tx: hh.x, ty: hh.y, L: hh.L }, gauge);
         drawHair(gauge, 'hold');
@@ -468,7 +520,8 @@ const mod: GameModule = {
         window.removeEventListener('keydown', onKeyD); window.removeEventListener('keyup', onKeyU);
         cv.removeEventListener('pointerdown', onDown);
         delete (window as any).__nose;
-        cv.remove();
+        cv.remove(); bgCv?.remove();
+        if (stage3d) { stage3d.dispose(); stage3d = null; } use3d = false;
       },
     };
   },

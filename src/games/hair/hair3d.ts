@@ -83,7 +83,7 @@ export class Hair3D {
     if (this.lost) return;
     const W = f.W, H = f.H, h = f.h, z = f.zoom;
     this.world.scale.set(z, z, z);
-    this.world.position.set(f.zx * (1 - z) + f.shX - W / 2, H / 2 - (f.zy * (1 - z) + f.shY), 0);
+    this.world.position.set((f.zx - W / 2) * (1 - z) + f.shX, -(f.zy - H / 2) * (1 - z) - f.shY, 0);
     const wx = (x: number) => x - W / 2, wy = (y: number) => H / 2 - y;
     // ---- おじさん ----
     const u = this.uncle, g = u.group;
@@ -102,12 +102,12 @@ export class Hair3D {
     for (let i = 0; i < NODE_MAX; i++) {
       const s = this.segs[i], j = this.joints[i];
       if (i >= n) { s.visible = false; j.visible = false; continue; }
-      const k = i / (n - 1), r = 3.6 - 2 * k, zi = h * (0.03 + k * 0.2);
+      const k = i / (n - 1), r = 4.4 - 2.4 * k, zi = h * (0.03 + k * 0.2);
       const a = f.nodes[i];
       j.visible = true; j.position.set(wx(a.x), wy(a.y), zi); j.scale.set(r, r, r);
       if (i < n - 1) {
         const b = f.nodes[i + 1], dx = b.x - a.x, dy = -(b.y - a.y), len = Math.hypot(dx, dy) || 1e-3, zb = h * (0.03 + (i + 1) / (n - 1) * 0.2);
-        const rr = 3.6 - 2 * ((i + 0.5) / (n - 1));
+        const rr = 4.4 - 2.4 * ((i + 0.5) / (n - 1));
         s.visible = true; s.position.set(wx((a.x + b.x) / 2), wy((a.y + b.y) / 2), (zi + zb) / 2);
         s.rotation.set(0, 0, Math.atan2(dy, dx) - Math.PI / 2); s.scale.set(rr, len, rr);
       } else s.visible = false;

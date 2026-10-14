@@ -130,7 +130,9 @@ const mod: GameModule = {
     }
 
     // ---- obstacles ----
+    let forceKind: Kind | null = null;
     function pickKind(m: number): Kind {
+      if (forceKind) return forceKind;
       const c: [Kind, number][] = [];
       if (m < 450) c.push(['bird', 5]);
       if (m > 30 && m < 600) c.push(['balloon', 4]);
@@ -458,7 +460,7 @@ const mod: GameModule = {
 
     function frame(ts: number) {
       raf = requestAnimationFrame(frame);
-    if (location.pathname.includes('dev')) (window as any).__fart = { get use3d() { return use3d; }, tap, get st() { return st; }, get alt() { return alt(); } };
+    if (location.pathname.includes('dev')) (window as any).__fart = { get use3d() { return use3d; }, tap, get st() { return st; }, get alt() { return alt(); }, force(k: Kind | null) { forceKind = k; }, put(k: Kind, dy: number, x: number) { forceKind = k; spawn(py + dy); forceKind = null; const o = obs[obs.length - 1]; o.x = x; o.vx = 0; o.vy = 0; }, hold() { gas = 0; vy = 300; } };
       const dt = Math.min(0.033, last ? (ts - last) / 1000 : 0.016); last = ts;
       update(dt); render();
     }
