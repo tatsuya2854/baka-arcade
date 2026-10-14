@@ -12,7 +12,7 @@ function wrap(g: CanvasRenderingContext2D, text: string, x: number, y: number, m
   for (const l of lines.slice(0, maxLines)) { g.fillText(l, x, y + n * lh); n++; }
   return n * lh;
 }
-export interface PosterOpts { fmt: Fmt; isBest: boolean; bp: number; rareName?: string; url: string; challenge?: string; t?: number }
+export interface PosterOpts { rank?: string; rateText?: string; fmt: Fmt; isBest: boolean; bp: number; rareName?: string; url: string; challenge?: string; t?: number }
 /** 投稿用ポスター。ゲーム画面のスクショではなく、artの描画を主役に再構成する */
 export function drawPoster(g: CanvasRenderingContext2D, meta: GameMeta, r: GameResult, o: PosterOpts) {
   const { w: W, h: H } = FMT[o.fmt], art = r.art, wide = o.fmt === 'x', S = W / 1080 * (wide ? 0.9 : 1);
@@ -30,7 +30,8 @@ export function drawPoster(g: CanvasRenderingContext2D, meta: GameMeta, r: GameR
   g.restore(); g.strokeStyle = meta.color; g.lineWidth = 5 * S; g.beginPath(); g.roundRect(pad, top, artW, artH, 28 * S); g.stroke();
   // テキスト領域
   const tx = wide ? pad + artW + 36 * S : pad, tw = wide ? W - tx - pad : W - pad * 2; let ty = wide ? top + 40 * S : top + artH + 70 * S;
-  if (o.rareName) { g.fillStyle = '#ffd93d'; g.font = font(900, 34 * S); g.fillText(`✨ レア発見：${o.rareName}`, tx, ty); ty += 56 * S; }
+  if (o.rareName) { g.fillStyle = '#ffd93d'; g.font = font(900, 34 * S); g.fillText(`✨ レア発見：${o.rareName}${o.rateText ? '  ' + o.rateText : ''}`.slice(0, 34), tx, ty); ty += 56 * S; }
+  if (o.rank) { g.fillStyle = '#ff3d81'; g.font = font(900, 40 * S); g.textAlign = 'right'; g.fillText(`RANK ${o.rank}`, W - pad, top + artH + (wide ? -16 * S : 56 * S)); g.textAlign = 'left'; }
   g.fillStyle = '#9a93c4'; g.font = font(700, 30 * S); g.fillText('称号', tx, ty); ty += 62 * S;
   let fs = 66 * S; g.font = font(900, fs); while (g.measureText(art?.title ?? '').width > tw && fs > 30) { fs -= 3; g.font = font(900, fs); }
   g.fillStyle = '#fff'; g.shadowColor = meta.color; g.shadowBlur = 24 * S; g.fillText(art?.title ?? r.scoreText, tx, ty); g.shadowBlur = 0; ty += 36 * S + fs * 0.2;

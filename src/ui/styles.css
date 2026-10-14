@@ -77,3 +77,6 @@ h2::before{content:"";width:6px;height:18px;background:var(--pink);box-shadow:0 
 .res{padding-bottom:calc(var(--safe-b) + 30px);justify-content:flex-start;background:linear-gradient(#2a0b4df8,#07060ffa)}
 .res .shr button{min-width:0}
 .res .artcv{margin-top:34px}
+.rankb{display:inline-block;font-size:13px;padding:2px 8px;border-radius:99px;background:var(--rc);color:#111;vertical-align:middle}
+.shr.big button{padding:15px 4px;font-size:16px}.shr.big .prim{flex:2;background:linear-gradient(135deg,#ff3d81,#ff8a3d);border:0;color:#fff}
+.edit{width:100%;text-align:left}.edit summary{font-size:13px;color:var(--cyan);padding:6px 2px;cursor:pointer}.edit>*{margin-top:8px}

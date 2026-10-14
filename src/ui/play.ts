@@ -11,6 +11,9 @@ import { openX, openLine, webShare, saveImage } from '../core/share';
 import { register } from '../core/codex';
 import { selfUrl, verifiedUrl, type Challenge } from '../core/challenge';
 import { card } from './hub';
+import { rankOf, RANK_COLOR } from '../core/rank';
+import { fetchRareStat, rarityText } from '../core/rarity';
+import { genVariants } from '../core/post';
 
 const esc = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 export function toast(msg: string) { const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.append(t); setTimeout(() => t.remove(), 2600); }
@@ -57,7 +60,7 @@ export function renderPlay(app: HTMLElement, id: string, challenge?: Challenge):
     const r = { ...r0, durationMs: Math.min(r0.durationMs || dur, dur) };
     const gain = award(m, r);
     mutate(s => { if (isBest) s.best[m.id] = r.score; s.plays[m.id] = (s.plays[m.id] ?? 0) + 1; s.history.push({ game: m.id, score: r.score, at: Date.now(), bp: gain.gained }); if (s.history.length > 50) s.history.shift(); });
-    track('game_over', { game: m.id, score: r.score, dur: Math.round(r.durationMs / 1000), best: isBest });
+    track('game_over', { game: m.id, score: r.score, dur: Math.round(r.durationMs / 1000), best: isBest, rare: r.art?.rare ?? '' });
     audio.stopBgm();
     const rare = register(m, r.art?.rare);
     if (rare.isNew) { audio.sfx('unlock'); toast(`✨ レア発見！ ${rare.name}（図鑑に登録）`); }
@@ -73,25 +76,29 @@ export function renderPlay(app: HTMLElement, id: string, challenge?: Challenge):
     const recs = [...ALL_META].filter(x => x.id !== m.id).sort((a, b) => (s.plays[a.id] ?? 0) - (s.plays[b.id] ?? 0)).slice(0, 2);
     const beat = challenge ? r.score > challenge.score : null;
     let cid = '', variant = 0, fmt: Fmt = 'ig';
-    const shareUrl = () => `${location.origin}/?r=s`;
-    const variants = art?.postVariants?.length ? art.postVariants : [r.shareText];
+    const rank = rankOf(m.id, r.score);
+    let rateText = '';
+    let variants = genVariants(m, r, { rank, rareName: rare.name, isBest, beat, rateText });
     const textFor = () => `${variants[variant % variants.length]}\n${TAGS[m.id] ?? ''} #BAKAARCADE`;
     const chUrl = () => cid ? verifiedUrl(cid) : selfUrl(m.id, r.score, load().nickname);
+    const shareUrl = chUrl; // 共有リンク=挑戦状リンク（開くと同じゲームをすぐ遊べる）
     layer.innerHTML = `<div class="ov res" style="--c:${m.color}">
       <canvas id="art" class="artcv"></canvas>
-      ${rare.name ? `<div class="chip bp">✨ レア結果：${esc(rare.name)}${rare.isNew ? '（NEW！図鑑登録）' : ''}</div>` : ''}
-      <div class="atitle">${esc(art?.title ?? r.scoreText)}</div>
+      ${rare.name ? `<div class="chip bp" id="rarechip">✨ レア結果：${esc(rare.name)}${rare.isNew ? '（NEW！図鑑登録）' : ''}<br><span class="muted" id="rate">出現率を集計中…</span></div>` : ''}
+      <div class="atitle">${esc(art?.title ?? r.scoreText)} <span class="rankb" style="--rc:${RANK_COLOR[rank]}">RANK ${rank}</span></div>
       <div class="score">${esc(r.scoreText)}</div>
       ${isBest ? '<div class="new">🎉 自己ベスト更新！</div>' : ''}
       <div class="comment">${esc(art?.comment ?? '')}</div>
       ${beat != null ? `<div class="chip ${beat ? 'bp' : ''}">${beat ? '🏆 挑戦状に勝利！' : `あと ${fmtScore(challenge!.score - r.score)}${m.scoreUnit}…惜しい！`}</div>` : ''}
       <button class="retry" id="retry" disabled>もう一回！</button>
+      <div class="shr big"><button id="sp" class="prim">📤 結果を共有</button><button id="sx2">𝕏で投稿</button></div>
+      <details class="edit"><summary>投稿文を編集・他の共有方法</summary>
       <textarea id="ptext" class="ptext" rows="4" maxlength="200">${esc(textFor())}</textarea>
       <div class="shr"><button id="sx">𝕏で共有</button><button id="sl">LINE</button><button id="ss">📤 画像つき共有</button><button id="sv">🔁 文案</button></div>
       <div class="tabs" id="fmts">${(Object.keys(FMT) as Fmt[]).map(k => `<button class="tab ${k === fmt ? 'on' : ''}" data-f="${k}">${FMT[k].label}</button>`).join('')}</div>
       <div class="shr"><button id="si">💾 画像を保存</button><button id="sc">🔗 挑戦状リンク</button><button id="sk">📋 文をコピー</button></div>
       ${art?.replay ? `<div class="shr"><button id="rp">▶ 崩壊リプレイ(スロー)</button><button id="rv">🎬 縦型動画を保存</button></div>` : ''}
-      <div class="muted" id="smsg">※Xへの画像の自動添付はできません。「画像を保存」してから投稿に添付してください（自動投稿はしません）</div>
+      </details><div class="muted" id="smsg">※Xへの画像の自動添付はできません。「画像を保存」してから投稿に添付してください（自動投稿はしません）</div>
       <div style="width:100%;text-align:left"><b style="color:var(--gold)">${gain.gained > 0 ? `+${gain.gained} BP` : 'BPなし'}</b> <span class="muted">${gain.capped ? '（本日の上限）' : gain.gained === 0 ? '（3秒以上・得点が必要）' : ''} 合計 ${s.bp}BP</span>
         <div class="bpbar"><i style="width:${pct}%"></i></div><div class="muted">${nextU ? `次: ${esc(nextU.name)}（${nextU.cost}BP）` : '全キャラ解放済み'}　自己ベスト ${esc(String(s.best[m.id] ?? '-'))}${m.scoreUnit}</div></div>
       ${[...gain.newlyUnlocked.map(u => `${u.emoji} 解放: ${u.name}`), ...notes].map(t => `<div class="chip bp">${esc(t)}</div>`).join('')}
@@ -117,7 +124,17 @@ export function renderPlay(app: HTMLElement, id: string, challenge?: Challenge):
     const $ = <T extends HTMLElement>(q: string) => layer.querySelector<T>(q)!;
     const msg = (t: string) => { $('#smsg').textContent = t; };
     const ptext = () => $<HTMLTextAreaElement>('#ptext').value;
-    const popts = () => ({ fmt, isBest, bp: gain.gained, rareName: rare.name, url: location.origin, challenge: `⚔️ 挑戦状：これを超えられる？ → ${chUrl().replace(/^https?:\/\//, '')}`.slice(0, 80) });
+    const popts = () => ({ fmt, isBest, bp: gain.gained, rareName: rare.name, rank, rateText: rateText.split('（')[0], url: location.origin, challenge: `⚔️ 挑戦状：これを超えられる？ → ${chUrl().replace(/^https?:\/\//, '')}`.slice(0, 80) });
+    // レア出現率（実測が溜まるまでは目安と明示）
+    if (r.art?.rare) fetchRareStat(m.id).then(st => { rateText = rarityText(m.id, r.art!.rare!, st); const el = layer.querySelector('#rate'); if (el) el.textContent = rateText; const ta = layer.querySelector<HTMLTextAreaElement>('#ptext'); const was = ta?.value === textFor(); variants = genVariants(m, r, { rank, rareName: rare.name, isBest, beat, rateText }); if (ta && was) ta.value = textFor(); });
+    // 共有は最大2タップ: 「結果を共有」1タップで画像つき共有。非対応端末は画像保存＋X投稿画面（自動投稿はしない）
+    $('#sp').addEventListener('click', async () => {
+      track('share_click', { via: 'web', game: m.id, primary: true });
+      const blob = await posterBlob(m, r, popts()); if (await webShare(ptext(), blob, shareUrl())) return;
+      saveImage(blob, `baka-${m.id}.png`); track('image_save', { game: m.id, fmt }); openX(ptext(), shareUrl());
+      msg('この端末は画像つき共有に非対応のため、画像を保存してXの投稿画面を開きました。保存した画像を添付してください（自動投稿はしません）');
+    });
+    $('#sx2').addEventListener('click', () => { track('share_click', { via: 'x', game: m.id, primary: true }); openX(ptext(), shareUrl()); msg('Xの投稿画面を開きました。画像は「他の共有方法」から保存して添付できます'); });
     $('#retry').addEventListener('click', () => { track('retry', { game: m.id }); audio.sfx('ok'); launch(true); });
     $('#home').addEventListener('click', () => go('/'));
     layer.querySelectorAll<HTMLElement>('[data-play]').forEach(b => b.addEventListener('click', () => { track('game_switch', { from: m.id, to: b.dataset.play! }); go('/play/' + b.dataset.play); }));

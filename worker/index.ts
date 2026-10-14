@@ -96,6 +96,8 @@ export class Arcade extends DurableObject<Env> {
         if (!EVENTS.has(e?.ev)) continue;
         const game = typeof e.props?.game === 'string' && LIMITS[e.props.game] ? e.props.game : '';
         const keys = [`${e.ev}|${game}`]; if (first && (e.ev === 'visit' || e.ev === 'third_play')) keys.push(`${e.ev}_new|`);
+        const via = e.props?.via; if (e.ev === 'share_click' && ['x', 'line', 'web', 'image'].includes(via)) keys.push(`share_click_${via}|${game}`);
+        const rare = e.props?.rare; if (e.ev === 'game_over' && game && typeof rare === 'string' && /^\w{1,20}$/.test(rare)) keys.push(`rare|${game}:${rare}`);
         const ref = e.props?.ref; if (ref === 'share' || ref === 'challenge') { keys.push(`${e.ev}@${ref}|${game}`); if (e.props?.returning === true) keys.push(`${e.ev}_returning@${ref}|`); }
         for (const k of keys) this.sql.exec('INSERT INTO ev VALUES(?,?,1) ON CONFLICT(day,k) DO UPDATE SET n=n+1', day, k);
       }
@@ -108,12 +110,30 @@ export class Arcade extends DurableObject<Env> {
       this.sql.exec('DELETE FROM ch WHERE nickname=?', nick); this.sql.exec('DELETE FROM scores WHERE nickname=?', nick);
       return json({ deleted: n });
     }
+    if (method === 'GET' && path === '/api/rare') { // レア出現率の実測（公開・集計値のみ）
+      const game = q.get('game') ?? ''; if (!LIMITS[game]) return json({ error: 'bad game' }, 400);
+      const plays = (this.sql.exec('SELECT COALESCE(SUM(n),0) c FROM ev WHERE k=?', `game_over|${game}`).toArray()[0] as { c: number }).c;
+      const rares: Record<string, number> = {};
+      for (const r of this.sql.exec('SELECT k, SUM(n) n FROM ev WHERE k LIKE ? GROUP BY k', `rare|${game}:%`).toArray() as { k: string; n: number }[]) rares[r.k.split(':')[1]] = r.n;
+      return json({ plays, rares });
+    }
     if (method === 'GET' && path === '/api/stats') {
       if (!adminToken || auth !== 'Bearer ' + adminToken) return json({ error: 'not found' }, 404);
       const rows = this.sql.exec('SELECT day,k,n FROM ev ORDER BY day DESC LIMIT 600').toArray() as { day: string; k: string; n: number }[];
       const tot: Record<string, number> = {}; for (const r of rows) tot[r.k] = (tot[r.k] ?? 0) + r.n;
       const kpi = { third_play_rate_new_visitors: (tot['visit_new|'] ?? 0) ? (tot['third_play_new|'] ?? 0) / tot['visit_new|'] : null };
-      return json({ kpi, totals: tot, rows });
+      const g = (k: string) => tot[k] ?? 0, sum = (p: string) => Object.entries(tot).filter(([k]) => k.startsWith(p)).reduce((a, [, n]) => a + n, 0), div = (a: number, b: number) => (b ? Math.round((a / b) * 1000) / 1000 : null);
+      // バイラルループ指標。share_click は「共有ボタン押下」であり投稿完了ではない（実際の投稿数は計測不能）
+      const starts = sum('game_start|'), overs = sum('game_over|'), views = sum('result_view|'), shares = sum('share_click|');
+      const viral = {
+        starts, completions: overs, completion_rate: div(overs, starts), replay_rate: div(sum('retry|'), overs),
+        result_views: views, share_click_rate: div(shares, views), x_share_rate: div(sum('share_click_x|'), views), line_share_rate: div(sum('share_click_line|'), views), web_share_rate: div(sum('share_click_web|'), views), image_save_rate: div(sum('image_save|'), views),
+        challenge_created: sum('challenge_create|'), inflow_visits_share: g('visit@share|'), inflow_visits_challenge: sum('challenge_visit|'),
+        inflow_play_rate_challenge: div(sum('game_start@challenge|'), sum('challenge_visit|')), inflow_play_rate_share: div(sum('game_start@share|'), g('visit@share|')),
+        reshare_rate_from_inflow: div(sum('share_click@challenge|') + sum('share_click@share|'), sum('game_start@challenge|') + sum('game_start@share|')),
+        note: 'shares=ボタン押下。SNSへの実投稿数は取得不能（推定のみ）',
+      };
+      return json({ kpi, viral, totals: tot, rows });
     }
     return json({ error: 'not found' }, 404);
   }
