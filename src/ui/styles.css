@@ -48,7 +48,7 @@ h2::before{content:"";width:6px;height:18px;background:var(--pink);box-shadow:0 
 /* play */
 .play{position:fixed;inset:0;background:#0b0a1c;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .play .groot{position:absolute;inset:0}
-.pbar{position:absolute;top:calc(var(--safe-t) + 6px);left:8px;right:8px;display:flex;justify-content:space-between;pointer-events:none;z-index:20}
+.pbar{position:absolute;top:calc(var(--safe-t) + 6px);left:8px;right:8px;display:flex;justify-content:space-between;pointer-events:none;z-index:40}
 .pbar button{pointer-events:auto;width:40px;height:40px;border-radius:12px;background:#000a;border:1px solid #ffffff33;font-size:18px}
 .ov{position:absolute;inset:0;z-index:30;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px calc(var(--safe-b) + 20px);text-align:center;background:radial-gradient(circle at 50% 30%,#2a0b4dee,#07060ff2)}
 .ov h3{margin:0;font-size:30px;font-weight:900}.ov .how{font-size:18px;font-weight:800;color:var(--green)}
@@ -73,3 +73,7 @@ h2::before{content:"";width:6px;height:18px;background:var(--pink);box-shadow:0 
 .res .score{font-size:44px}.comment{font-size:15px;color:#d9d4ff;line-height:1.5}
 .ptext{width:100%;border-radius:12px;background:#120f26;color:#fff;border:1px solid #ffffff33;padding:10px;font:inherit;font-size:14px;resize:vertical}
 .res{justify-content:flex-start}
+.res>*{flex-shrink:0}
+.res{padding-bottom:calc(var(--safe-b) + 30px);justify-content:flex-start;background:linear-gradient(#2a0b4df8,#07060ffa)}
+.res .shr button{min-width:0}
+.res .artcv{margin-top:34px}

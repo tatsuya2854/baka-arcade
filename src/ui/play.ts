@@ -100,7 +100,7 @@ export function renderPlay(app: HTMLElement, id: string, challenge?: Challenge):
       <div class="next">${recs.map(x => card(x)).join('')}</div>
       <button class="link" id="home">ホームへ戻る</button></div>`;
     // 結果アートを大きく表示（何も操作しなくても動く）
-    const cv = layer.querySelector<HTMLCanvasElement>('#art')!, dpr = Math.min(2, devicePixelRatio || 1), cw = Math.min(innerWidth - 40, 420), ch = Math.round(cw * 1.1);
+    const cv = layer.querySelector<HTMLCanvasElement>('#art')!, dpr = Math.min(2, devicePixelRatio || 1), cw = Math.min(innerWidth - 40, 420), ch = Math.round(Math.min(cw * 1.0, innerHeight * 0.42));
     cv.width = cw * dpr; cv.height = ch * dpr; cv.style.width = cw + 'px'; cv.style.height = ch + 'px';
     const g = cv.getContext('2d')!; let rpStart = 0, replaying = false; const t0 = performance.now();
     const loop = () => {
@@ -131,7 +131,7 @@ export function renderPlay(app: HTMLElement, id: string, challenge?: Challenge):
       const blob = await posterBlob(m, r, popts()), ok = await webShare(ptext(), blob, shareUrl());
       if (!ok) { saveImage(blob, `baka-${m.id}.png`); track('image_save', { game: m.id }); msg('この環境では画像つき共有ができないため、画像を保存しました。投稿文は「文をコピー」から。'); }
     });
-    $('#si').addEventListener('click', async () => { track('image_save', { game: m.id, fmt }); saveImage(await posterBlob(m, r, popts()), `baka-${m.id}-${fmt}.png`); msg(`${FMT[fmt].label} の画像を保存しました`); });
+    $('#si').addEventListener('click', async () => { track('image_save', { game: m.id, fmt }); try { saveImage(await posterBlob(m, r, popts()), `baka-${m.id}-${fmt}.png`); msg(`${FMT[fmt].label} の画像を保存しました`); } catch (e) { console.error('poster', e); msg('画像の生成に失敗しました: ' + String((e as Error)?.message ?? e)); } });
     $('#sk').addEventListener('click', async () => { track('link_copy', { game: m.id, what: 'text' }); try { await navigator.clipboard.writeText(ptext() + '\n' + shareUrl()); msg('投稿文をコピーしました'); } catch { msg('コピーに失敗しました。文を長押しでコピーしてください'); } });
     $('#sc').addEventListener('click', async () => {
       track('challenge_create', { game: m.id, verified: !!cid }); const u = chUrl();
