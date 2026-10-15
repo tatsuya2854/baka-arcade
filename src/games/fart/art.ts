@@ -1,6 +1,7 @@
 import type { ResultArt } from '../../core/types';
 import { drawUncle } from '../../core/characters';
 import { CFG } from './config';
+import { ASSETS } from './sprites';
 
 export interface Stats {
   m: number; taps: number; playSec: number; peakGas: number; overheat: number; birdNear: number;
@@ -53,15 +54,30 @@ export function buildArt(s: Stats): ResultArt {
     g.save(); g.beginPath(); g.rect(0, 0, w, h); g.clip();
     const bm = pose === 'planet' ? 1500 : pose === 'tiny' || pose === 'crash' ? Math.min(m, 40) : m;
     const [c1, c2] = bgFor(bm);
-    const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, rgb(c1)); gr.addColorStop(1, rgb(c2)); g.fillStyle = gr; g.fillRect(0, 0, w, h);
-    if (bm > 280) { g.fillStyle = '#fff'; for (let i = 0; i < 70; i++) { g.globalAlpha = (0.4 + 0.6 * Math.abs(Math.sin(t * 2 + i))) * Math.min(1, (bm - 280) / 400); g.fillRect(h01(i) * w, h01(i + 9) * h, u * 0.005 + 1, u * 0.005 + 1); } g.globalAlpha = 1; }
+    const BG = ASSETS.bg, HS = ASSETS.hero, P = !!(BG && HS);
+    if (P) {
+      // 高度に応じて背景画像(下=街 / 上=宇宙)をスクロールした位置で切り出す
+      const f = Math.min(1, bm / 700), dh = Math.max(h * 1.8, w / BG!.width * BG!.height), dw = BG!.width / BG!.height * dh;
+      g.drawImage(BG!, (w - dw) * 0.85, (h - dh) * (1 - f), dw, dh);
+      if (bm > 500) { const gr2 = g.createLinearGradient(0, 0, 0, h); gr2.addColorStop(0, rgb(c1)); gr2.addColorStop(1, rgb(c2)); g.globalAlpha = Math.min(1, (bm - 500) / 600) * 0.85; g.fillStyle = gr2; g.fillRect(0, 0, w, h); g.globalAlpha = 1; }
+      const sg = g.createLinearGradient(0, 0, 0, h); sg.addColorStop(0, 'rgba(0,0,0,.4)'); sg.addColorStop(0.25, 'rgba(0,0,0,0)'); sg.addColorStop(0.75, 'rgba(0,0,0,0)'); sg.addColorStop(1, 'rgba(0,0,0,.35)'); g.fillStyle = sg; g.fillRect(0, 0, w, h);
+    } else {
+      const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, rgb(c1)); gr.addColorStop(1, rgb(c2)); g.fillStyle = gr; g.fillRect(0, 0, w, h);
+    }
+    if (bm > 280 && (!P || bm > 700)) { g.fillStyle = '#fff'; for (let i = 0; i < 70; i++) { g.globalAlpha = (0.4 + 0.6 * Math.abs(Math.sin(t * 2 + i))) * Math.min(1, (bm - 280) / 400); g.fillRect(h01(i) * w, h01(i + 9) * h, u * 0.005 + 1, u * 0.005 + 1); } g.globalAlpha = 1; }
     if (bm >= 1000) { for (let i = 0; i < 3; i++) { const cx = [0.2, 0.8, 0.5][i] * w, cy = [0.25, 0.4, 0.75][i] * h, r = u * 0.5; const rg = g.createRadialGradient(cx, cy, 0, cx, cy, r); const col = ['255,80,200', '90,160,255', '180,90,255'][i]; rg.addColorStop(0, `rgba(${col},0.35)`); rg.addColorStop(1, `rgba(${col},0)`); g.fillStyle = rg; g.fillRect(0, 0, w, h); } }
     // 雲
-    if (bm < 420 && pose !== 'tiny') { g.fillStyle = 'rgba(255,255,255,0.85)'; for (let i = 0; i < 6; i++) { const cx = ((h01(i) * 1.4 - 0.2) * w + t * 6 * (1 + i % 3)) % (w * 1.3) - w * 0.15, cy = h * (0.15 + h01(i + 3) * 0.7), r = u * (0.05 + h01(i + 6) * 0.05); g.beginPath(); g.arc(cx, cy, r, 0, 6.3); g.arc(cx + r * 1.1, cy - r * 0.3, r * 1.2, 0, 6.3); g.arc(cx + r * 2.2, cy, r, 0, 6.3); g.fill(); } }
+    if (!P && bm < 420 && pose !== 'tiny') { g.fillStyle = 'rgba(255,255,255,0.85)'; for (let i = 0; i < 6; i++) { const cx = ((h01(i) * 1.4 - 0.2) * w + t * 6 * (1 + i % 3)) % (w * 1.3) - w * 0.15, cy = h * (0.15 + h01(i + 3) * 0.7), r = u * (0.05 + h01(i + 6) * 0.05); g.beginPath(); g.arc(cx, cy, r, 0, 6.3); g.arc(cx + r * 1.1, cy - r * 0.3, r * 1.2, 0, 6.3); g.arc(cx + r * 2.2, cy, r, 0, 6.3); g.fill(); } }
     const cx = w / 2, hh = u * 0.42;
     let cy = h * 0.56 + Math.sin(t * 2) * u * 0.01;
     // 地面 or 惑星
-    if (pose === 'planet') {
+    const dec = (k: string, x: number, y: number, wd: number, rot: number) => { const d = ASSETS.decor[k]; if (!d) return false; const hd = wd / d.s.aspect; g.save(); g.translate(x, y); g.rotate(rot); g.drawImage(d.s.c, -wd / 2, -hd / 2, wd, hd); g.restore(); return true; };
+    if (P && pose === 'planet') {
+      if (!dec('planet', cx, h * 1.02, u * 1.5, -0.1)) { g.fillStyle = '#a8325e'; g.beginPath(); g.ellipse(cx, h * 1.12, w * 0.9, h * 0.42, 0, 0, 6.3); g.fill(); }
+      cy = h * 0.7;
+    } else if (P && (pose === 'tiny' || pose === 'crash')) {
+      const sh = g.createRadialGradient(cx, h * 0.8, 0, cx, h * 0.8, u * 0.3); sh.addColorStop(0, 'rgba(0,0,0,.45)'); sh.addColorStop(1, 'rgba(0,0,0,0)'); g.save(); g.translate(0, h * 0.8); g.scale(1, 0.18); g.translate(0, -h * 0.8); g.fillStyle = sh; g.fillRect(0, h * 0.8 - u * 0.3, w, u * 0.6); g.restore();
+    } else if (pose === 'planet') {
       g.fillStyle = '#a8325e'; g.beginPath(); g.ellipse(cx, h * 1.12, w * 0.9, h * 0.42, 0, 0, 6.3); g.fill();
       g.fillStyle = 'rgba(255,200,120,0.5)'; g.beginPath(); g.ellipse(cx - w * 0.2, h * 0.86, u * 0.1, u * 0.03, 0, 0, 6.3); g.ellipse(cx + w * 0.25, h * 0.9, u * 0.07, u * 0.02, 0, 0, 6.3); g.fill();
       cy = h * 0.7 - hh * 0.0;
@@ -71,7 +87,8 @@ export function buildArt(s: Stats): ResultArt {
       g.fillStyle = '#4fb04f'; g.fillRect(0, h * 0.8, w, h * 0.2); g.fillStyle = '#3a8f3a'; g.fillRect(0, h * 0.8, w, u * 0.015);
     }
     // 月 / 地球
-    if (pose === 'space') { g.fillStyle = '#e8e4cc'; g.beginPath(); g.arc(w * 0.82, h * 0.2, u * 0.12, 0, 6.3); g.fill(); g.fillStyle = '#111'; g.beginPath(); g.arc(w * 0.82 - u * 0.04, h * 0.2 - u * 0.01, u * 0.012, 0, 6.3); g.arc(w * 0.82 + u * 0.03, h * 0.2 - u * 0.01, u * 0.012, 0, 6.3); g.fill(); }
+    if (P && (pose === 'space' || pose === 'planet')) { dec('moon', w * 0.84, h * 0.42, u * 0.3, 0); if (pose === 'space') dec('iss', w * 0.2, h * 0.45, u * 0.3, -0.25 + Math.sin(t * 0.8) * 0.05); }
+    else if (pose === 'space') { g.fillStyle = '#e8e4cc'; g.beginPath(); g.arc(w * 0.82, h * 0.2, u * 0.12, 0, 6.3); g.fill(); g.fillStyle = '#111'; g.beginPath(); g.arc(w * 0.82 - u * 0.04, h * 0.2 - u * 0.01, u * 0.012, 0, 6.3); g.arc(w * 0.82 + u * 0.03, h * 0.2 - u * 0.01, u * 0.012, 0, 6.3); g.fill(); }
     // 主人公
     g.save();
     let rot = 0, expr: 'idle' | 'happy' | 'angry' | 'wow' | 'scared' | 'dead' | 'sweat' = 'happy', jet = pose !== 'tiny' && pose !== 'crash' && pose !== 'planet';
@@ -91,14 +108,21 @@ export function buildArt(s: Stats): ResultArt {
       g.beginPath(); g.moveTo(-hsize * 0.08, hsize * 0.15); g.quadraticCurveTo(-hsize * 0.2, hsize * 0.15 + len * 0.5, 0, hsize * 0.15 + len); g.quadraticCurveTo(hsize * 0.2, hsize * 0.15 + len * 0.5, hsize * 0.08, hsize * 0.15); g.fill();
       g.fillStyle = 'rgba(150,230,110,0.4)'; for (let i = 0; i < 6; i++) { const k = (t * 1.5 + i / 6) % 1; g.beginPath(); g.arc(Math.sin(i * 3 + t) * hsize * 0.1, hsize * 0.2 + len * (0.4 + k * 0.9), hsize * (0.04 + k * 0.08), 0, 6.3); g.fill(); }
     }
-    drawUncle(g, { x: 0, y: 0, h: hsize, expr, t, flail: pose === 'tiny' ? 0 : 1, skin: 'skin_normal' });
-    const headR = hsize * 0.19, headCy = -hsize / 2 + headR;
+    if (P) { const sw = hsize * HS!.aspect; g.drawImage(HS!.c, -sw / 2, -hsize / 2, sw, hsize); }
+    else drawUncle(g, { x: 0, y: 0, h: hsize, expr, t, flail: pose === 'tiny' ? 0 : 1, skin: 'skin_normal' });
+    const headR = P ? hsize * 0.1 : hsize * 0.19, headCy = P ? -hsize / 2 + hsize * 0.1 : -hsize / 2 + headR;
+    if (P) g.translate(hsize * HS!.aspect * 0.03, 0);
     if (pose === 'space' || pose === 'planet') { g.strokeStyle = 'rgba(200,240,255,0.9)'; g.lineWidth = hsize * 0.02; g.fillStyle = 'rgba(160,220,255,0.25)'; g.beginPath(); g.arc(0, headCy, headR * 1.35, 0, 6.3); g.fill(); g.stroke(); }
-    if (pose === 'afro') { g.fillStyle = '#3b2a20'; for (let i = 0; i < 18; i++) { const a = -Math.PI + (i / 17) * Math.PI, r0 = headR * 0.9, r1 = headR * (1.9 + 0.5 * h01(i) + 0.15 * Math.sin(t * 12 + i)); g.beginPath(); g.moveTo(Math.cos(a - 0.12) * r0, headCy + Math.sin(a - 0.12) * r0); g.lineTo(Math.cos(a) * r1, headCy + Math.sin(a) * r1); g.lineTo(Math.cos(a + 0.12) * r0, headCy + Math.sin(a + 0.12) * r0); g.fill(); } }
-    if (pose === 'soot') { g.fillStyle = 'rgba(20,16,14,0.88)'; g.beginPath(); g.arc(0, headCy, headR * 0.95, 0, 6.3); g.fill(); g.fillStyle = '#fff'; g.beginPath(); g.arc(-headR * 0.35, headCy - headR * 0.1, headR * 0.17, 0, 6.3); g.arc(headR * 0.35, headCy - headR * 0.1, headR * 0.17, 0, 6.3); g.fill(); g.fillStyle = '#000'; g.beginPath(); g.arc(-headR * 0.35, headCy - headR * 0.1, headR * 0.07, 0, 6.3); g.arc(headR * 0.35, headCy - headR * 0.1, headR * 0.07, 0, 6.3); g.fill(); }
+    if (!P && pose === 'afro') { g.fillStyle = '#3b2a20'; for (let i = 0; i < 18; i++) { const a = -Math.PI + (i / 17) * Math.PI, r0 = headR * 0.9, r1 = headR * (1.9 + 0.5 * h01(i) + 0.15 * Math.sin(t * 12 + i)); g.beginPath(); g.moveTo(Math.cos(a - 0.12) * r0, headCy + Math.sin(a - 0.12) * r0); g.lineTo(Math.cos(a) * r1, headCy + Math.sin(a) * r1); g.lineTo(Math.cos(a + 0.12) * r0, headCy + Math.sin(a + 0.12) * r0); g.fill(); } }
+    if (P && pose === 'soot') { for (let i = 0; i < 7; i++) { const k = (t * 0.7 + i / 7) % 1; g.fillStyle = `rgba(30,26,24,${0.5 * (1 - k)})`; g.beginPath(); g.arc(Math.sin(i * 2.3) * hsize * 0.25, -hsize * 0.2 - k * hsize * 0.4, hsize * (0.05 + k * 0.07), 0, 6.3); g.fill(); } }
+    if (!P && pose === 'soot') { g.fillStyle = 'rgba(20,16,14,0.88)'; g.beginPath(); g.arc(0, headCy, headR * 0.95, 0, 6.3); g.fill(); g.fillStyle = '#fff'; g.beginPath(); g.arc(-headR * 0.35, headCy - headR * 0.1, headR * 0.17, 0, 6.3); g.arc(headR * 0.35, headCy - headR * 0.1, headR * 0.17, 0, 6.3); g.fill(); g.fillStyle = '#000'; g.beginPath(); g.arc(-headR * 0.35, headCy - headR * 0.1, headR * 0.07, 0, 6.3); g.arc(headR * 0.35, headCy - headR * 0.1, headR * 0.07, 0, 6.3); g.fill(); }
     g.restore();
     // 鳥の群れ
-    if (pose === 'bird' || s.birdNear >= 3) { const n = Math.min(8, 3 + s.birdNear); for (let i = 0; i < n; i++) { const a = (i / n) * 6.283 + t * 0.8; drawBird(g, cx + Math.cos(a) * u * 0.3, cy + Math.sin(a) * u * 0.22, u * 0.0042 * 5, Math.cos(a + 1.57) > 0 ? 1 : -1, t); } }
+    if (pose === 'bird' || s.birdNear >= 3) { const n = Math.min(8, 3 + s.birdNear); for (let i = 0; i < n; i++) { const a = (i / n) * 6.283 + t * 0.8; const bx = cx + Math.cos(a) * u * 0.3, by = cy + Math.sin(a) * u * 0.22, fl = Math.cos(a + 1.57) > 0 ? 1 : -1;
+      if (ASSETS.crow) { const cw = u * 0.15, ch = cw / ASSETS.crow.aspect, fw = Math.sin(t * 14 + i); g.save(); g.translate(bx, by); g.scale(fl, 1 + fw * 0.08); g.drawImage(ASSETS.crow.c, -cw / 2, -ch / 2, cw, ch); g.restore(); }
+      else drawBird(g, bx, by, u * 0.0042 * 5, fl, t); } }
+    // 最期にぶつかった相手（画像があれば）
+    if (P && s.death === 'hit' && pose !== 'bird') { const KM: Record<string, string> = { balloon: 'balloon', storm: 'storm', plane: 'plane', ufo: 'ufo', meteor: 'meteor' }, it = ASSETS.items[KM[s.killer] ?? '']; if (it) { const iw = u * 0.26, ih = iw / it.s.aspect; g.save(); g.translate(w * 0.78, h * 0.72 + Math.sin(t * 2) * u * 0.01); g.rotate(0.15); g.drawImage(it.s.c, -iw / 2, -ih / 2, iw, ih); g.restore(); } }
     // クラッシュの星
     if (pose === 'crash') { g.fillStyle = '#ffe35a'; for (let i = 0; i < 5; i++) { const a = t * 2 + i * 1.26; g.beginPath(); g.arc(cx + Math.cos(a) * u * 0.2, h * 0.8 - hh * 1.05 + Math.sin(a) * u * 0.03, u * 0.014, 0, 6.3); g.fill(); } }
     // ポスター文字

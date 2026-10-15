@@ -1,6 +1,6 @@
 import type { ResultArt } from '../../core/types';
 import { CFG } from './config';
-import { KetchupShader, buildBackdrop, drawBottle, drawStream, drawTarget, layoutFor, type Layout } from './scene';
+import { KetchupShader, KI, loadKetchupImgs, buildBackdrop, drawBottle, drawStream, drawTarget, layoutFor, type Layout } from './scene';
 
 export interface Frame { data: Uint8Array; theta: number; q: number }
 export interface Summary {
@@ -43,9 +43,10 @@ export function buildArt(s: Summary, field: Float32Array, frames: Frame[]): Resu
     { label: '長押し回数', value: `${s.presses}回` },
   ];
   if (s.burst > 0) facts.push({ label: '飛び散った粒', value: `${s.burst}粒` });
+  void loadKetchupImgs();
   const caches = new Map<string, HTMLCanvasElement>();
   const backdrop = (L: Layout) => {
-    const k = `${Math.round(L.w)}x${Math.round(L.h)}${L.poster ? 'p' : 'g'}`; let c = caches.get(k);
+    const k = `${Math.round(L.w)}x${Math.round(L.h)}${L.poster ? 'p' : 'g'}${KI.bg ? 'i' : ''}`; let c = caches.get(k);
     if (!c) { c = buildBackdrop(L, Math.min(2, (typeof window !== 'undefined' && window.devicePixelRatio) || 1)); if (caches.size > 6) caches.clear(); caches.set(k, c); } return c;
   };
   let posterShader: KetchupShader | null = null, replayShader: KetchupShader | null = null;
@@ -61,12 +62,12 @@ export function buildArt(s: Summary, field: Float32Array, frames: Frame[]): Resu
     const rr = (3 + 3 * sp) * L.s * 2; g.beginPath(); g.moveTo(gx - rr, gy); g.lineTo(gx + rr, gy); g.moveTo(gx, gy - rr * 1.2); g.lineTo(gx, gy + rr * 1.2); g.stroke(); g.restore();
     g.textAlign = 'center'; g.lineJoin = 'round';
     const big = Math.round(Math.min(w * 0.17, h * 0.12));
-    g.font = `900 ${big}px ${FONT}`; g.lineWidth = big * 0.14; g.strokeStyle = 'rgba(255,255,255,.9)';
-    const ty = h * 0.16; g.strokeText(pct, w / 2, ty); g.fillStyle = a(s) ; g.fillText(pct, w / 2, ty);
+    g.font = `900 ${big}px ${FONT}`; g.lineWidth = big * 0.14; g.strokeStyle = 'rgba(28,12,6,.92)';
+    const ty = Math.max(h * 0.16, big * 1.4); g.strokeText(pct, w / 2, ty); g.fillStyle = a(s) ; g.fillText(pct, w / 2, ty);
     const sm = Math.round(big * 0.3); g.font = `900 ${sm}px ${FONT}`; g.lineWidth = sm * 0.2;
-    g.strokeText('目標との誤差', w / 2, ty - big * 0.95); g.fillStyle = '#4a3226'; g.fillText('目標との誤差', w / 2, ty - big * 0.95);
+    g.strokeText('目標との誤差', w / 2, ty - big * 0.95); g.fillStyle = '#fff'; g.fillText('目標との誤差', w / 2, ty - big * 0.95);
     const by = h * 0.9; const bsm = Math.round(Math.min(w * 0.058, h * 0.045)); g.font = `900 ${bsm}px ${FONT}`; g.lineWidth = bsm * 0.22;
-    const line = `出した量 ${gs}g ／ 目標 ${tg}g`; g.strokeText(line, w / 2, by); g.fillStyle = '#4a3226'; g.fillText(line, w / 2, by);
+    const line = `出した量 ${gs}g ／ 目標 ${tg}g`; g.strokeText(line, w / 2, by); g.fillStyle = '#fff'; g.fillText(line, w / 2, by);
   };
   const n = frames.length;
   const dur = Math.min(7, n / (60 / CFG.recEvery) * 2.2);
@@ -93,4 +94,4 @@ export function buildArt(s: Summary, field: Float32Array, frames: Frame[]): Resu
     draw,
   };
 }
-const a = (s: Summary) => (Math.abs(s.err) <= 0.04 ? '#1c7a3a' : Math.abs(s.err) <= 0.15 ? '#c26a00' : '#b3151b');
+const a = (s: Summary) => (Math.abs(s.err) <= 0.04 ? '#6cf29a' : Math.abs(s.err) <= 0.15 ? '#ffc04d' : '#ff6a5f');

@@ -171,6 +171,36 @@
    "w": 1024,
    "h": 1024,
    "alpha": true
+  },
+  "item_moon": {
+   "v": "ca6943c5",
+   "widths": [
+    360,
+    720
+   ],
+   "w": 1024,
+   "h": 1024,
+   "alpha": true
+  },
+  "item_planet": {
+   "v": "5799f783",
+   "widths": [
+    360,
+    720
+   ],
+   "w": 1024,
+   "h": 1024,
+   "alpha": true
+  },
+  "item_iss": {
+   "v": "090e69ab",
+   "widths": [
+    360,
+    720
+   ],
+   "w": 1024,
+   "h": 1024,
+   "alpha": true
   }
  },
  "save-the-hair": {

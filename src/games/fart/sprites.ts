@@ -12,7 +12,9 @@ const ITEMS: Record<string, { id: string; w: number; ax: number; ay: number }> =
   ufo: { id: 'item_ufo', w: 88, ax: 0.5, ay: 0.5 },
   meteor: { id: 'item_meteor', w: 76, ax: 0.6, ay: 0.5 },
 };
-export const ASSETS: { bg: HTMLImageElement | null; hero: Spr | null; crow: Spr | null; items: Record<string, ItemSpr | undefined> } = { bg: null, hero: null, crow: null, items: {} };
+/** 宇宙の装飾（当たり判定なし・見た目だけ）。w=描画幅 */
+const DECOR: Record<string, { id: string; w: number }> = { iss: { id: 'item_iss', w: 170 }, moon: { id: 'item_moon', w: 190 }, planet: { id: 'item_planet', w: 330 } };
+export const ASSETS: { bg: HTMLImageElement | null; hero: Spr | null; crow: Spr | null; items: Record<string, ItemSpr | undefined>; decor: Record<string, { s: Spr; w: number } | undefined> } = { bg: null, hero: null, crow: null, items: {}, decor: {} };
 let loading: Promise<void> | null = null;
 
 /** 不透明部分だけを切り出し、軽量サイズにして色味(右上の陽)を軽く乗せる。 */
@@ -33,7 +35,9 @@ function prep(img: HTMLImageElement, H: number): Spr {
 }
 
 export function loadFartAssets(): Promise<void> {
-  return loading ??= Promise.all([loadImg(SLUG, 'bg'), loadImg(SLUG, 'hero'), loadImg(SLUG, 'item'), ...Object.values(ITEMS).map(v => loadImg(SLUG, v.id))]).then(([bg, hero, item, ...its]) => {
+  return loading ??= Promise.all([loadImg(SLUG, 'bg'), loadImg(SLUG, 'hero'), loadImg(SLUG, 'item'), ...Object.values(ITEMS).map(v => loadImg(SLUG, v.id)), ...Object.values(DECOR).map(v => loadImg(SLUG, v.id))]).then(([bg, hero, item, ...all]) => {
+    const its = all.slice(0, Object.keys(ITEMS).length), dcs = all.slice(Object.keys(ITEMS).length);
+    Object.keys(DECOR).forEach((k, i) => { const im = dcs[i]; ASSETS.decor[k] = im ? { s: prep(im, 220), w: DECOR[k].w } : undefined; });
     Object.keys(ITEMS).forEach((k, i) => { const im = its[i]; const v = ITEMS[k]; ASSETS.items[k] = im ? { s: prep(im, 140), w: v.w, ax: v.ax, ay: v.ay } : undefined; });
     ASSETS.bg = bg; ASSETS.hero = hero ? prep(hero, 300) : null; ASSETS.crow = item ? prep(item, 200) : null;
   });

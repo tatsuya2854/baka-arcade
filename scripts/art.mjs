@@ -9,6 +9,7 @@ import sharp from 'sharp';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const ART = path.join(ROOT, 'art'), OUT = path.join(ROOT, 'public/img'), MAP = path.join(ROOT, 'src/generated/imagemap.json');
+const WT = Number(process.env.WHITE_T ?? 251);
 const EXT = ['.png', '.webp', '.jpg', '.jpeg', '.avif'];
 const readJson = p => JSON.parse(fs.readFileSync(p, 'utf8'));
 const C = readJson(path.join(ART, 'concepts.json'));
@@ -58,11 +59,17 @@ function prompts() {
 async function whiteToAlpha(buf) { // 画像の縁から白を塗りつぶして透過化（透過PNGで出せなかった場合の応急処置）
   const { data, info } = await sharp(buf).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   const { width: w, height: h } = info, seen = new Uint8Array(w * h), st = [];
-  const white = i => data[i * 4] > 238 && data[i * 4 + 1] > 238 && data[i * 4 + 2] > 238;
+  const white = i => data[i * 4] > WT && data[i * 4 + 1] > WT && data[i * 4 + 2] > WT;
   const push = i => { if (!seen[i] && white(i)) { seen[i] = 1; st.push(i); } };
   for (let x = 0; x < w; x++) { push(x); push((h - 1) * w + x); } for (let y = 0; y < h; y++) { push(y * w); push(y * w + w - 1); }
   while (st.length) { const i = st.pop(), x = i % w; data[i * 4 + 3] = 0; if (x > 0) push(i - 1); if (x < w - 1) push(i + 1); if (i >= w) push(i - w); if (i < w * h - w) push(i + w); }
-  return sharp(data, { raw: { width: w, height: h, channels: 4 } }).blur(0.6).png().toBuffer();
+  // 縁の白いふちとギザギザを消す: 透明に接する不透明画素を1px削る（細い線を壊さないよう1回だけ）
+  const al = new Uint8Array(w * h); for (let i = 0; i < w * h; i++) al[i] = data[i * 4 + 3];
+  for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) { const i = y * w + x; if (al[i] && (!al[i - 1] || !al[i + 1] || !al[i - w] || !al[i + w])) data[i * 4 + 3] = 0; }
+  const out = await sharp(data, { raw: { width: w, height: h, channels: 4 } }).png().toBuffer();
+  const ach = await sharp(out).extractChannel(3).blur(0.8).raw().toBuffer();
+  for (let k = 0; k < w * h; k++) data[k * 4 + 3] = ach[k];
+  return sharp(data, { raw: { width: w, height: h, channels: 4 } }).png().toBuffer();
 }
 
 async function build() {

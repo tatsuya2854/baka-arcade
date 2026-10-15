@@ -1,6 +1,6 @@
 import type { ResultArt } from '../../core/types';
 import { EXACT_MM, MOUNTAIN_MM, NEAR_MM, ROUNDS, ZERO_MM, fmtCm, fmtErr, roundScore } from './config';
-import { drawPaste, drawPile, drawScene, newScene, rr, type Scene } from './draw';
+import { TI, X0, PXMM, YB, YR, PD, bgCanvas, drawBrush, drawRuler, drawPaste, drawPile, drawScene, newScene, rr, type Scene } from './draw';
 
 export interface RoundRes { target: number; L: number; err: number }
 /** 記録サンプル: t(秒) と [L,grip,flow,amp,lift,thread,spat,used,reveal,taper,target] */
@@ -69,9 +69,45 @@ export function buildArt(rs: RoundRes[], trace: Sample[]): ResultArt {
       },
     };
   }
+  // 写真背景版: 大理石カウンターの上に、ゲームと同じ歯ブラシ・鋼の定規・歯磨き粉を並べる
+  const drawPhoto = (g: CanvasRenderingContext2D, w: number, h: number, t: number) => {
+    g.drawImage(bgCanvas(Math.round(w), Math.round(h)), 0, 0, w, h);
+    const u = Math.min(w, h * 0.8), vg = g.createLinearGradient(0, 0, 0, h); vg.addColorStop(0, 'rgba(255,255,255,.35)'); vg.addColorStop(0.3, 'rgba(255,255,255,0)'); g.fillStyle = vg; g.fillRect(0, 0, w, h);
+    const strokeT = (txt: string, x: number, y: number, px: number, col: string, align: CanvasTextAlign, wMax: number) => {
+      g.font = `900 ${Math.round(px)}px ${FONT}`; g.textAlign = align; g.lineJoin = 'round'; g.lineWidth = px * 0.16; g.strokeStyle = 'rgba(255,255,255,.92)';
+      g.strokeText(txt, x, y, wMax); g.fillStyle = col; g.fillText(txt, x, y, wMax);
+    };
+    g.textBaseline = 'alphabetic';
+    const avg = j.mean, avgCol = avg <= 1 ? '#0e8f4a' : avg <= 6 ? '#d9770a' : '#d12f33';
+    strokeT('歯磨き粉10.0cm　平均誤差', w / 2, h * 0.07, Math.min(u * 0.05, h * 0.04), '#31424f', 'center', w * 0.94);
+    strokeT(`${avg.toFixed(1)}mm`, w / 2, h * 0.07 + Math.min(u * 0.13, h * 0.09) * 1.05, Math.min(u * 0.13, h * 0.09), avgCol, 'center', w * 0.94);
+    const top = h * 0.2, rh = (h * 0.79) / ROUNDS, sc = Math.min(w / 400, rh * 0.7 / 142), ox = (w - 390 * sc) / 2;
+    const sL = ox + (X0 - 18) * sc, sR = ox + 376 * sc;
+    for (let i = 0; i < rs.length; i++) {
+      const r = rs[i], y = top + i * rh, stripTop = y + rh * 0.26;
+      const ease = t <= 0 ? 1 : (() => { const q = clamp((t - i * 0.5) / 0.9); return 1 - Math.pow(1 - q, 3); })();
+      const col = Math.abs(r.err) <= EXACT_MM ? '#0e8f4a' : Math.abs(r.err) <= 3 ? '#d9770a' : '#d12f33', fs = Math.min(u * 0.034, rh * 0.1), tL = w / h > 1.2 ? sL : Math.min(sL, w * 0.07), tR = w / h > 1.2 ? sR : Math.max(sR, w * 0.93);
+      strokeT(`${i + 1}回目　目標 ${fmtCm(r.target)}`, tL, y + rh * 0.16, fs, '#31424f', 'left', (tR - tL) * 0.5);
+      strokeT(fmtErr(r.err), tR, y + rh * 0.18, fs * 1.5, col, 'right', (tR - tL) * 0.46);
+      g.save(); g.translate(ox, stripTop - (YB - 24) * sc); g.scale(sc, sc);
+      drawBrush(g); drawRuler(g);
+      const Lpx = Math.min(r.L, MOUNTAIN_MM - 14) * PXMM * ease, over = r.L >= MOUNTAIN_MM - 14, yc = YB - 4;
+      drawPaste(g, X0, yc, Lpx, PD, 0, 0, 0);
+      if (over && ease > 0.9) drawPile(g, X0 + Lpx - 6, yc - 2, PD, 18);
+      const tx = X0 + r.target * PXMM, tipX = X0 + Lpx;
+      g.strokeStyle = 'rgba(255,59,48,.25)'; g.lineWidth = 5; g.beginPath(); g.moveTo(tx, YB - 24); g.lineTo(tx, YR + 50); g.stroke();
+      g.strokeStyle = '#ff3b30'; g.lineWidth = 1.8; g.beginPath(); g.moveTo(tx, YB - 24); g.lineTo(tx, YR + 50); g.stroke();
+      g.fillStyle = '#1f6fe0'; g.beginPath(); g.moveTo(tipX, YR + 2); g.lineTo(tipX - 5, YR + 12); g.lineTo(tipX + 5, YR + 12); g.closePath(); g.fill();
+      const lx = Math.max(X0 + 8, Math.min(X0 + 150 * PXMM, tipX)), ly = YR + 64;
+      g.fillStyle = '#10202e'; rr(g, lx - 32, ly - 11, 64, 22, 11); g.fill();
+      g.fillStyle = '#fff'; g.font = `800 13px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(fmtCm(r.L), lx, ly);
+      g.restore();
+    }
+  };
   return {
     title, comment, facts, rare: j.rare, postVariants, replay,
     draw(g, w, h, t) {
+      if (TI.bg) { drawPhoto(g, w, h, t); return; }
       const u = Math.min(w / 390, h / 500), pad = w * 0.07;
       let gr = g.createLinearGradient(0, 0, 0, h);
       gr.addColorStop(0, '#f2f6f8'); gr.addColorStop(1, '#cdd8e0');

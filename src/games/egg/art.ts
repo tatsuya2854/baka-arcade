@@ -25,6 +25,11 @@ function pick(ds: Drop[], avg: number): { title: string; comment: string } {
   return { title: '卵に謝れ', comment: '卵「なぜ私を…」' };
 }
 
+function scrim(g: CanvasRenderingContext2D, w: number, h: number) {
+  let gr = g.createLinearGradient(0, 0, 0, h * 0.14); gr.addColorStop(0, 'rgba(0,0,0,.55)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, w, h * 0.14);
+  gr = g.createLinearGradient(0, h * 0.72, 0, h); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(0.35, 'rgba(0,0,0,.55)'); gr.addColorStop(1, 'rgba(0,0,0,.8)'); g.fillStyle = gr; g.fillRect(0, h * 0.72, w, h * 0.28);
+}
+
 export function buildArt(ds: Drop[], avg: number): ResultArt {
   const { title, comment } = pick(ds, avg);
   const best = ds.reduce((a, b) => (b.score > a.score ? b : a), ds[0]);
@@ -43,8 +48,9 @@ export function buildArt(ds: Drop[], avg: number): ResultArt {
     misses ? `フライパンを外して${avg}点。台所が犠牲になった。` : `目玉焼きを落として${avg}点。「${title}」になった。`,
   ];
   const draw = (g: CanvasRenderingContext2D, w: number, h: number, t: number) => {
-    const pr = Math.min(w * 0.42, h * 0.31), gm = topGeom(w / 2, h * 0.45, pr), s = gm.s;
-    drawPanBg(g, w, h, gm); drawGlintsPublic(g, gm, t);
+    const pr = Math.min(w * 0.42, h * 0.31), gm = topGeom(w / 2, h * 0.42, pr), s = gm.s;
+    drawPanBg(g, w, h, gm);
+    scrim(g, w, h); drawGlintsPublic(g, gm, t);
     const order = [...ds].sort((a, b) => a.score - b.score);
     for (const d of order) drawLanded(g, d, 4, gm, 1, t);
     // 誤差線と番号
@@ -57,15 +63,19 @@ export function buildArt(ds: Drop[], avg: number): ResultArt {
     });
     const u = Math.min(w, h * 0.8), fs = Math.round(Math.max(11, u * 0.034)), cw = u * 0.29;
     ds.forEach((d, i) => {
-      const x = w / 2 + (i - 1) * (cw + u * 0.02), y = h * 0.76;
-      g.fillStyle = 'rgba(8,8,10,.78)'; g.beginPath(); g.roundRect(x - cw / 2, y - fs, cw, fs * 2, fs); g.fill();
+      const x = w / 2 + (i - 1) * (cw + u * 0.02), y = h * 0.785;
+      g.fillStyle = 'rgba(8,8,10,.8)'; g.beginPath(); g.roundRect(x - cw / 2, y - fs, cw, fs * 2, fs); g.fill();
       g.fillStyle = COLS[i % 3]; g.font = `800 ${fs}px ${FONT}`; g.fillText(`${i + 1}  ${d.miss ? '外れ' : fmm(d.d)}`, x, y + 1);
     });
     drawSteamPublic(g, gm, t, 0.7);
     // 見出し
-    g.fillStyle = 'rgba(255,255,255,.9)'; g.font = `900 ${Math.round(w * 0.05)}px ${FONT}`; g.fillText('目玉焼きを落とせ', w / 2, h * 0.07);
-    g.fillStyle = '#ffc83d'; g.font = `900 ${Math.round(u * 0.1)}px ${FONT}`; g.fillText(`${avg}点`, w / 2, h * 0.89);
-    g.fillStyle = 'rgba(255,255,255,.75)'; g.font = `800 ${Math.round(u * 0.04)}px ${FONT}`; g.fillText(title, w / 2, h * 0.96);
+    const tx = (txt: string, y: number, px: number, col: string) => {
+      g.font = `900 ${Math.round(px)}px ${FONT}`; g.lineJoin = 'round'; g.lineWidth = px * 0.18; g.strokeStyle = 'rgba(0,0,0,.85)';
+      g.strokeText(txt, w / 2, y, w * 0.94); g.fillStyle = col; g.fillText(txt, w / 2, y, w * 0.94);
+    };
+    tx('目玉焼きを落とせ', h * 0.06, Math.min(w * 0.05, h * 0.045), '#fff');
+    tx(`${avg}点`, h * 0.885, u * 0.1, '#ffc83d');
+    tx(title, h * 0.958, u * 0.05, '#fff');
   };
   const durationSec = 4.2;
   const replay = {

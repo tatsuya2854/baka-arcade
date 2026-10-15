@@ -67,7 +67,10 @@
         "item_cloud": "a single dense dark storm cloud (cumulonimbus fragment) with soft volumetric edges, lit from upper right",
         "item_plane": "ONLY one small white passenger jet seen from below in banking flight, isolated on a plain pure white background, nothing else in the frame: no sky, no clouds, no earth, no sun, no markings or text",
         "item_ufo": "a classic silver flying saucer UFO with a subtle ring of soft lights, seen from slightly below, realistic brushed metal, no text",
-        "item_meteor": "a glowing fiery rock meteor with a short trailing glow, realistic rocky texture, seen from the side"
+        "item_meteor": "a glowing fiery rock meteor with a short trailing glow, realistic rocky texture, seen from the side",
+        "item_moon": "ONLY the full moon with realistic craters and maria, lit from the right, isolated on a plain pure white background, nothing else in the frame, no sky, no stars",
+        "item_planet": "ONLY a realistic gas giant planet with soft banded clouds and a thin ring system, lit from the upper right, isolated on a plain pure white background, nothing else in the frame, no stars, no text",
+        "item_iss": "ONLY the International Space Station with solar panels, realistic metal and gold foil, viewed from slightly above, isolated on a plain pure white background, nothing else in the frame, no Earth, no stars, no text or flags"
       }
     },
     "save-the-hair": {

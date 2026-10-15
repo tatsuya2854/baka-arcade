@@ -43,11 +43,14 @@ function drawStrand(c: CanvasRenderingContext2D, x: number, y: number, len: numb
   }
   c.restore();
 }
-function drawSpecimens(c: CanvasRenderingContext2D, w: number, h: number, t: number, rs: Rec[], title: string) {
+function drawSpecimens(c: CanvasRenderingContext2D, w: number, h: number, t: number, rs: Rec[], title: string, imBg: HTMLImageElement | null, imTw: HTMLImageElement | null) {
   c.save();
-  const bg = c.createLinearGradient(0, 0, 0, h); bg.addColorStop(0, '#2a1a3a'); bg.addColorStop(1, '#0f0a1a'); c.fillStyle = bg; c.fillRect(0, 0, w, h);
+  if (imBg) {
+    drawCover(c, imBg, w, h, 0.5, 0.5);
+    c.fillStyle = 'rgba(8,10,20,.3)'; c.fillRect(0, 0, w, h);
+  } else { const bg = c.createLinearGradient(0, 0, 0, h); bg.addColorStop(0, '#2a1a3a'); bg.addColorStop(1, '#0f0a1a'); c.fillStyle = bg; c.fillRect(0, 0, w, h); }
   const u = Math.min(w, h), pad = u * 0.04;
-  c.fillStyle = '#f4e6c8'; c.strokeStyle = '#c9a25a'; c.lineWidth = u * 0.012;
+  c.fillStyle = imBg ? 'rgba(250,244,230,.76)' : '#f4e6c8'; c.strokeStyle = '#c9a25a'; c.lineWidth = u * 0.012;
   c.beginPath(); c.roundRect(pad, pad, w - pad * 2, h - pad * 2, u * 0.03); c.fill(); c.stroke();
   c.fillStyle = '#5a3a1a'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = `900 ${u * 0.06}px sans-serif`;
   c.fillText('鼻毛標本コレクション', w / 2, pad + u * 0.06);
@@ -58,6 +61,7 @@ function drawSpecimens(c: CanvasRenderingContext2D, w: number, h: number, t: num
     const bigH = (bot - top) * (rest.length ? 0.58 : 0.9);
     // 最長を大きく(長さは見た目で圧縮)
     drawCase(c, pad * 2, top, w - pad * 4, bigH, big, t, u, true);
+    if (imTw && bigH > u * 0.5) { const th = u * 0.2; c.save(); c.translate(w / 2, top + 8 + u * 0.16); c.rotate(-0.82); c.drawImage(imTw, -0.1 * th, -0.89 * th, th, th); c.restore(); }
     if (rest.length) {
       const cols = Math.min(4, rest.length), rowsN = Math.ceil(rest.length / cols), y0 = top + bigH + pad, cw = (w - pad * 2 - pad * (cols + 1)) / cols, rh = (bot - y0 - pad * (rowsN - 1)) / rowsN;
       rest.forEach((r, i) => drawCase(c, pad * 2 + (i % cols) * (cw + pad) - pad * 0.5, y0 + Math.floor(i / cols) * (rh + pad), cw, rh, r, t, u * 0.6, false));
@@ -69,12 +73,12 @@ function drawSpecimens(c: CanvasRenderingContext2D, w: number, h: number, t: num
 function drawCase(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: Rec, t: number, u: number, big: boolean) {
   c.save();
   c.fillStyle = '#fffaf0'; c.strokeStyle = '#a88a55'; c.lineWidth = 2; c.beginPath(); c.roundRect(x, y, w, h, 8); c.fill(); c.stroke();
-  const lab = h * 0.2, len = (h - lab - 14) * (r.shape === 'long' ? 1 : r.shape === 'earth' ? 1 : 0.85);
+  const lab = big ? h * 0.2 : h * 0.42, len = (h - lab - 14) * (r.shape === 'long' ? 1 : r.shape === 'earth' ? 1 : 0.85);
   drawStrand(c, x + w / 2, y + 8, len, r.shape, t, big ? 4 : 2.5);
   c.fillStyle = '#5a3a1a'; c.textAlign = 'center'; c.textBaseline = 'middle';
-  c.font = `900 ${Math.max(10, u * (big ? 0.045 : 0.045))}px sans-serif`; c.fillText(`${fmtCm(r.cm)} ${SHAPE_NAME[r.shape]}`, x + w / 2, y + h - lab * 0.65);
+  c.font = `900 ${Math.max(7, Math.min(u * 0.045, lab * 0.34))}px sans-serif`; c.fillText(`${fmtCm(r.cm)} ${SHAPE_NAME[r.shape]}`, x + w / 2, y + h - lab * 0.65);
   c.fillStyle = r.grade === 'PERFECT' ? '#d9a400' : r.grade === 'GREAT' ? '#1fa86a' : '#3a86d8';
-  c.font = `900 ${Math.max(9, u * (big ? 0.035 : 0.04))}px sans-serif`; c.fillText(r.grade, x + w / 2, y + h - lab * 0.25);
+  c.font = `900 ${Math.max(7, Math.min(u * (big ? 0.035 : 0.04), lab * 0.28))}px sans-serif`; c.fillText(r.grade, x + w / 2, y + h - lab * 0.25);
   c.restore();
 }
 
@@ -220,7 +224,8 @@ const mod: GameModule = {
         { label: '最高精度', value: bestPct[best] },
       ];
       const sc = score;
-      const draw = (c: CanvasRenderingContext2D, w: number, h: number, t: number) => drawSpecimens(c, w, h, t, rs, title);
+      const imBg0 = imgBg, imTw0 = imgTw;
+      const draw = (c: CanvasRenderingContext2D, w: number, h: number, t: number) => drawSpecimens(c, w, h, t, rs, title, imBg0, imTw0);
       return { title, comment, facts, rare, draw, postVariants: [
         `鼻毛を${rs.length}本抜いて${sc}点！称号「${title}」 #鼻毛を抜け`,
         `最長${longest ? fmtCm(longest.cm) : '0cm'}の鼻毛を抜いた…「${title}」`,

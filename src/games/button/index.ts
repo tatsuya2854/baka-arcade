@@ -5,7 +5,7 @@ import { EVENTS, drawBtn, txt } from './events';
 import type { Fx, FxInit, Game, GameEvent, Mod, Scr, BurstOpt } from './events';
 import { drawBubble } from '../../core/characters';
 import { load, mutate } from '../../core/storage';
-import { buildArt } from './news';
+import { buildArt, loadNewsImgs } from './news';
 import { View3D } from './view3d';
 import { loadImg, drawCover } from '../../core/images';
 
@@ -258,6 +258,7 @@ const mod: GameModule = {
       });
     }
 
+    void loadNewsImgs();
     Promise.race([Promise.all([loadImg('dont-press', 'bg'), loadImg('dont-press', 'hero'), loadImg('dont-press', 'item')]), new Promise<null[]>(r => setTimeout(() => r([null, null, null]), 2500))]).then(([b, h, i]) => {
       if (destroyed) return; imgs.bg = b; imgs.hero = h; imgs.item = i; last = performance.now(); raf = requestAnimationFrame(frame);
     });

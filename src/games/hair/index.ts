@@ -13,30 +13,42 @@ interface Part { k: PKind; x: number; y: number; vx: number; vy: number; life: n
 const clamp = (v: number, a = 0, b = 1) => Math.max(a, Math.min(b, v));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
-function artDraw(g: CanvasRenderingContext2D, w: number, h: number, t: number, v: string, dir: number, sec: number, mph: number, title: string, byDmg: boolean, ms: number) {
-  const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#173a63'); gr.addColorStop(1, '#2e6f9e'); g.fillStyle = gr; g.fillRect(0, 0, w, h);
+interface ArtImgs { bg: HTMLImageElement; hero: HTMLCanvasElement; S: number }
+function artDraw(g: CanvasRenderingContext2D, w: number, h: number, t: number, v: string, dir: number, sec: number, mph: number, title: string, byDmg: boolean, ms: number, im: ArtImgs | null) {
+  let hh = Math.min(w * 1.25, h * 0.95), cx = w / 2, hcy = h * 0.5, hr = 0.19 * hh, ry = hcy - hr * 0.95;
+  if (im) {
+    drawCover(g, im.bg, w, h, 0.5, 0.5);
+    const sg = g.createLinearGradient(0, 0, 0, h); sg.addColorStop(0, 'rgba(0,0,0,.45)'); sg.addColorStop(0.25, 'rgba(0,0,0,.05)'); sg.addColorStop(0.7, 'rgba(0,0,0,.05)'); sg.addColorStop(1, 'rgba(0,0,0,.6)'); g.fillStyle = sg; g.fillRect(0, 0, w, h);
+  } else {
+    const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#173a63'); gr.addColorStop(1, '#2e6f9e'); g.fillStyle = gr; g.fillRect(0, 0, w, h);
+  }
   g.strokeStyle = 'rgba(255,255,255,.4)'; g.lineWidth = Math.max(1, w / 200);
   for (let i = 0; i < 12; i++) { const y = (i * 0.083 + 0.03) * h, x = ((t * 500 + i * 97) % (w + 200)) - 100, xx = dir > 0 ? x : w - x; g.beginPath(); g.moveTo(xx, y); g.lineTo(xx - dir * w * 0.15, y); g.stroke(); }
-  const hh = Math.min(w * 1.25, h * 0.95), hr = 0.19 * hh, cx = w / 2, hcy = h * 0.5, ry = hcy - hr * 0.95;
   const expr = v === 'regrow' ? 'happy' : byDmg ? 'angry' : v === 'last' ? 'sweat' : 'cry';
-  drawUncle(g, { x: cx, y: hcy + 0.31 * hh, h: hh, expr, t, bald: true, hairLen: 0, rot: dir * 0.03 });
-  g.lineCap = 'round'; const col = '#3b2a20';
+  if (im) {
+    // 写真の頭。髪の根元(0.60,0.13)を ry に合わせる。画面下までシャツが届くよう縦位置を決める
+    const S = Math.min(w * 1.2, h * 0.78); hh = S; hr = 0.19 * S; cx = w / 2;
+    ry = Math.max(h * 0.2, h - S * 0.9); const rx0 = cx + (0.60 - 0.52) * S;
+    g.save(); g.translate(0, 0); g.drawImage(im.hero, rx0 - 0.60 * S, ry - 0.13 * S, S, S); g.restore();
+    cx = rx0; hcy = ry + 0.17 * S;
+  } else drawUncle(g, { x: cx, y: hcy + 0.31 * hh, h: hh, expr, t, bald: true, hairLen: 0, rot: dir * 0.03 });
+  g.lineCap = 'round'; const col = im ? '#14100d' : '#3b2a20'; const kw = im ? 0.45 : 1;
   const strand = (x0: number, len: number, bend: number, wid: number, lift = 1) => {
-    g.strokeStyle = col; g.lineWidth = wid; g.beginPath(); g.moveTo(x0, ry);
+    g.strokeStyle = col; g.lineWidth = Math.max(1.5, wid * kw); g.beginPath(); g.moveTo(x0, ry);
     g.bezierCurveTo(x0 + bend * 0.3, ry - len * 0.4 * lift, x0 + bend * 0.8, ry - len * 0.6 * lift, x0 + bend, ry - len * 0.6 * lift + len * 0.4 * (1 - lift) + Math.sin(t * 8) * 2); g.stroke();
   };
   if (v === 'last') strand(cx, hr * 1.1, Math.sin(t * 4) * hr * 0.1, Math.max(2, hr * 0.05));
   else if (v === 'sideways') strand(cx, hr * 1.4, dir * hr * 1.3, Math.max(2, hr * 0.05), 0.35);
   else if (v === 'tangled') {
-    g.strokeStyle = col; g.lineWidth = Math.max(2, hr * 0.045); g.beginPath(); g.moveTo(cx, ry);
+    g.strokeStyle = col; g.lineWidth = Math.max(1.5, hr * 0.045 * kw); g.beginPath(); g.moveTo(cx, ry);
     for (let i = 1; i <= 24; i++) g.lineTo(cx + Math.sin(i * 2.1) * hr * 0.5 + dir * i * 2, ry - Math.abs(Math.sin(i * 1.3)) * hr * 0.3 + Math.cos(i * 2.7) * hr * 0.1); g.stroke();
     g.fillStyle = 'rgba(255,60,60,.45)'; g.beginPath(); g.ellipse(cx, ry + hr * 0.1, hr * 0.7, hr * 0.3, 0, 0, 7); g.fill();
   } else if (v === 'flyaway') {
     g.fillStyle = 'rgba(255,100,100,.5)'; g.beginPath(); g.ellipse(cx, ry + 2, hr * 0.12, hr * 0.06, 0, 0, 7); g.fill();
     const k = (t * 0.6) % 1;
-    for (let i = 0; i < 7; i++) { const f = i / 7, px = cx + dir * (hr * 0.4 + f * w * 0.4 + k * w * 0.2), py = ry - f * hr * 1.5 - k * hr * 0.5 + Math.sin(t * 5 + i) * hr * 0.15; g.save(); g.translate(px, py); g.rotate(t * 3 + i); g.strokeStyle = col; g.lineWidth = Math.max(2, hr * 0.04); g.beginPath(); g.moveTo(-hr * 0.2, 0); g.quadraticCurveTo(0, hr * 0.12, hr * 0.2, 0); g.stroke(); g.restore(); }
+    for (let i = 0; i < 7; i++) { const f = i / 7, px = cx + dir * (hr * 0.4 + f * w * 0.4 + k * w * 0.2), py = ry - f * hr * 1.5 - k * hr * 0.5 + Math.sin(t * 5 + i) * hr * 0.15; g.save(); g.translate(px, py); g.rotate(t * 3 + i); g.strokeStyle = im ? '#d8d0c6' : col; g.lineWidth = Math.max(1.5, hr * 0.04 * kw); g.beginPath(); g.moveTo(-hr * 0.2, 0); g.quadraticCurveTo(0, hr * 0.12, hr * 0.2, 0); g.stroke(); g.restore(); }
   } else if (v === 'regrow') {
-    for (let i = -14; i <= 14; i++) { const a = i / 14, x0 = cx + a * hr * 0.9, y0 = hcy - Math.sqrt(Math.max(0, 1 - a * a * 0.8)) * hr * 0.97; g.strokeStyle = col; g.lineWidth = Math.max(2, hr * 0.035); g.beginPath(); g.moveTo(x0, y0); g.quadraticCurveTo(x0 + a * hr * 0.3 + Math.sin(t * 3 + i) * 3, y0 - hr * 0.35, x0 + a * hr * 0.5 + dir * hr * 0.1, y0 - hr * (0.5 + 0.2 * Math.abs(Math.sin(i * 3.1)))); g.stroke(); }
+    for (let i = -14; i <= 14; i++) { const a = i / 14, x0 = cx + a * hr * 0.9, y0 = hcy - Math.sqrt(Math.max(0, 1 - a * a * 0.8)) * hr * 0.97; g.strokeStyle = col; g.lineWidth = Math.max(1.5, hr * 0.035 * kw); g.beginPath(); g.moveTo(x0, y0); g.quadraticCurveTo(x0 + a * hr * 0.3 + Math.sin(t * 3 + i) * 3, y0 - hr * 0.35, x0 + a * hr * 0.5 + dir * hr * 0.1, y0 - hr * (0.5 + 0.2 * Math.abs(Math.sin(i * 3.1)))); g.stroke(); }
     g.fillStyle = '#ffe97a'; for (let i = 0; i < 8; i++) { const a = t * 2 + i; g.fillText('✦', cx + Math.cos(a) * hr * 1.5, hcy + Math.sin(a * 1.3) * hr * 1.3); }
   }
   g.font = `900 ${Math.round(w * 0.075)}px "Hiragino Sans", sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
@@ -559,7 +571,8 @@ function start(ctx: GameContext): GameInstance {
       { label: '押さえ率', value: Math.round(ratio * 100) + '%' }, { label: '頭皮ダメージ最大', value: Math.round(Math.min(1, peakDmg) * 100) + '%' },
       { label: '抜け寸前', value: nearMiss + '回' }, { label: '終了原因', value: overWhy },
     ];
-    const draw = (gg: CanvasRenderingContext2D, w: number, h: number, tt: number) => artDraw(gg, w, h, tt, variant, dir, sec, mph, title, byDmg, maxStress);
+    const artIm: ArtImgs | null = imgBg && heroOff ? { bg: imgBg, hero: heroOff, S: heroS } : null;
+    const draw = (gg: CanvasRenderingContext2D, w: number, h: number, tt: number) => artDraw(gg, w, h, tt, variant, dir, sec, mph, title, byDmg, maxStress, artIm);
     return { title, comment, facts, rare, draw, postVariants: [
       `最後の一本を${s1}秒守りました！称号は「${title}」`, `風速${mph}mの突風の中、毛根が${s1}秒がんばった。「${title}」`, `${overWhy} ${s1}秒で散った…「${title}」 #ハゲを守れ`,
     ] };

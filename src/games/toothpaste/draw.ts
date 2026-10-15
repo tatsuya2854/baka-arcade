@@ -24,7 +24,7 @@ let handC: HTMLCanvasElement | null = null;
 // 背景は静的なのでオフスクリーンに1回だけ描いて使い回す
 let bgCv: HTMLCanvasElement | null = null;
 export const releaseBg = () => { bgCv = null; handC = null; };
-function bgCanvas(w: number, h: number): HTMLCanvasElement {
+export function bgCanvas(w: number, h: number): HTMLCanvasElement {
   if (bgCv && bgCv.width === w && bgCv.height === h) return bgCv;
   const c = bgCv && bgCv.width === w && bgCv.height === h ? bgCv : document.createElement('canvas'); c.width = w; c.height = h;
   const g = c.getContext('2d')!, b = TI.bg!;
@@ -118,7 +118,7 @@ function drawCap(g: CanvasRenderingContext2D) {
 }
 
 // ---- 歯ブラシ（上から） ----
-function drawBrush(g: CanvasRenderingContext2D) {
+export function drawBrush(g: CanvasRenderingContext2D) {
   const hx0 = X0 - 24, hx1 = 374;
   // 接地影
   for (let i = 0; i < 3; i++) { g.fillStyle = `rgba(40,55,70,${0.07})`; rr(g, hx0 - i * 2, YB - 19 + 6 + i * 3, hx1 - hx0 + 70 + i * 4, 40 + i * 2, 20); g.fill(); }
@@ -151,7 +151,7 @@ function drawBrush(g: CanvasRenderingContext2D) {
 }
 
 // ---- 定規 ----
-function drawRuler(g: CanvasRenderingContext2D) {
+export function drawRuler(g: CanvasRenderingContext2D) {
   const x0 = X0 - 18, x1 = 376, y0 = YR, hh = 46;
   for (let i = 0; i < 3; i++) { g.fillStyle = 'rgba(40,55,70,0.07)'; rr(g, x0 - i, y0 + 5 + i * 2, x1 - x0 + i * 2, hh + i, 5); g.fill(); }
   const gr = g.createLinearGradient(0, y0, 0, y0 + hh);

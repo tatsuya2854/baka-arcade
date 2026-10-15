@@ -3,11 +3,11 @@ import type { Snap } from './sim';
 import { loadImg, drawCover } from '../../core/images';
 
 const SLUG = 'tissue-one';
-const IMG: { bg: HTMLImageElement | null; hero: HTMLImageElement | null; hand: HTMLImageElement | null; loaded: boolean } = { bg: null, hero: null, hand: null, loaded: false };
+export const IMG: { bg: HTMLImageElement | null; hero: HTMLImageElement | null; hand: HTMLImageElement | null; item: HTMLImageElement | null; loaded: boolean } = { bg: null, hero: null, hand: null, item: null, loaded: false };
 let loadP: Promise<void> | null = null;
 /** 画像を先読み（1回だけ。失敗/未生成は null のまま=旧描画にフォールバック）。 */
 export function ensureImgs(): Promise<void> {
-  return loadP ??= Promise.all([loadImg(SLUG, 'bg'), loadImg(SLUG, 'hero'), loadImg(SLUG, 'hand_pinch')]).then(([b, h, hd]) => { IMG.bg = b; IMG.hero = h; IMG.hand = hd; IMG.loaded = true; });
+  return loadP ??= Promise.all([loadImg(SLUG, 'bg'), loadImg(SLUG, 'hero'), loadImg(SLUG, 'hand_pinch'), loadImg(SLUG, 'item')]).then(([b, h, hd, it]) => { IMG.bg = b; IMG.hero = h; IMG.hand = hd; IMG.item = it; IMG.loaded = true; });
 }
 let bgC: HTMLCanvasElement | null = null, bgKey = '';
 /** 背景はオフスクリーンに1回だけ描いて使い回す */

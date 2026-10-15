@@ -2,6 +2,7 @@ import type { ResultArt } from '../../core/types';
 import { CFG } from './config';
 import { drawScene, newScene, type SceneState, type Scratch } from './scene';
 
+const FONT = '"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",system-ui,sans-serif';
 export interface UsbRun {
   ok: boolean; forced: boolean; fails: number; wrongSide: number; errMm: number; errDeg: number; timeSec: number; score: number;
   scratches: Scratch[]; frames: Float32Array; nFrames: number; light: [number, number];
@@ -37,7 +38,7 @@ const commentOf = (r: UsbRun) => r.ok
 
 export function makeArt(r: UsbRun): ResultArt {
   const mkScene = (t: number): SceneState => {
-    const S = newScene(); S.dark = 0.28; S.desk = false; S.finger = !r.ok; S.zoom = 1.12; S.cy = 0.45; S.scratches = r.scratches; S.lx = Math.sin(t * 0.8) * 2.5; S.ly = -0.5 + Math.sin(t * 1.1) * 1.2;
+    const S = newScene(); S.dark = 0.28; S.desk = false; S.finger = !r.ok; S.zoom = 0.82; S.cy = 0.4; S.scratches = r.scratches; S.lx = Math.sin(t * 0.8) * 2.5; S.ly = -0.5 + Math.sin(t * 1.1) * 1.2;
     if (r.ok) { S.x = 0; S.y = 0; S.z = 0; S.flipT = 0; S.insert = 1; S.led = 1; S.rot = 0; S.finger = true; }
     else {
       const cyc = (t % 1.8); S.x = Math.max(-4, Math.min(4, r.errMm > 0 ? r.errMm * 0.8 : 0.8)); S.y = 0.3; S.z = 2.6 + Math.sin(t * 2) * 0.1; S.flipT = r.wrongSide > 0 ? 1 : 0; S.rot = Math.max(-0.15, Math.min(0.15, r.errDeg * Math.PI / 180)); S.led = -0.8;
@@ -46,9 +47,15 @@ export function makeArt(r: UsbRun): ResultArt {
     return S;
   };
   const draw = (g: CanvasRenderingContext2D, w: number, h: number, t: number) => {
-    drawScene(g, w, h, mkScene(t));
-    const sz = Math.max(10, Math.min(w, h) * 0.04); g.save(); g.fillStyle = 'rgba(255,255,255,0.55)'; g.font = `800 ${sz}px ui-monospace, monospace`; g.textAlign = 'left';
-    g.fillText(r.ok ? `INSERTED  /  TRY #${r.fails + 1}` : `REJECTED  x${r.fails}`, w * 0.05, h - sz * 1.2); g.restore();
+    const S0 = mkScene(t); if (w / h > 1.2) { S0.zoom = 0.58; S0.cy = 0.4; }
+    drawScene(g, w, h, S0);
+    const u = Math.min(w, h * 0.9);
+    const gr = g.createLinearGradient(0, h * 0.7, 0, h); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,.75)'); g.fillStyle = gr; g.fillRect(0, h * 0.7, w, h * 0.3);
+    g.save(); g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
+    const tx = (txt: string, y: number, px: number, col: string) => { g.font = `900 ${Math.round(px)}px ${FONT}`; g.lineWidth = px * 0.18; g.strokeStyle = 'rgba(0,0,0,.85)'; g.strokeText(txt, w / 2, y, w * 0.94); g.fillStyle = col; g.fillText(txt, w / 2, y, w * 0.94); };
+    tx(r.ok ? 'INSERTED' : 'REJECTED', h * 0.84, u * 0.1, r.ok ? '#7dffa8' : '#ff6a5e');
+    tx(r.ok ? `${r.fails + 1}回目で成功　ずれ${r.errMm.toFixed(1)}mm` : `${r.fails}回弾かれた　${r.wrongSide}回裏表ミス`, h * 0.92, u * 0.05, '#fff');
+    g.restore();
   };
   const n = r.nFrames, durSec = Math.max(2, Math.min(5, n / 60 * 2.5));
   const replay = n > 4 ? {

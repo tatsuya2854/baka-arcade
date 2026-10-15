@@ -295,18 +295,22 @@ const mod: GameModule = {
       }
       // decor: ISS, moon, planet
       const decor = (ay: number, draw: (x: number, y: number) => void, par: number) => { const y = H - (ay * UPM - camY * par) ; if (y > -200 && y < H + 200) draw(0, y); };
+      const dimg = (k: string, x: number, y: number, rot: number) => { const d = ASSETS.decor[k]; if (!d) return false; const w = d.w, h = w / d.s.aspect; g.save(); g.translate(x, y); g.rotate(rot); g.drawImage(d.s.c, -w / 2, -h / 2, w, h); g.restore(); return true; };
       decor(780, (_, y) => { // 宇宙ステーション
+        if (dimg('iss', W * 0.25 + Math.sin(t * 0.3) * 20, y, -0.2 + Math.sin(t * 0.2) * 0.05)) return;
         g.save(); g.translate(W * 0.25 + Math.sin(t * 0.3) * 20, y); g.rotate(-0.2);
         g.fillStyle = '#b8c0d0'; g.fillRect(-26, -7, 52, 14); g.fillStyle = '#2a60c0'; g.fillRect(-70, -4, 36, 8); g.fillRect(34, -4, 36, 8);
         g.fillStyle = '#e8eef5'; g.fillRect(-10, -14, 20, 28); g.restore();
       }, 0.85);
       decor(950, (_, y) => { // 月
+        if (dimg('moon', W * 0.75, y, 0)) return;
         const x = W * 0.75; const rg = g.createRadialGradient(x - 20, y - 20, 10, x, y, 100); rg.addColorStop(0, '#fffbe6'); rg.addColorStop(1, '#bdb89a');
         g.fillStyle = rg; g.beginPath(); g.arc(x, y, 90, 0, 6.3); g.fill(); g.fillStyle = 'rgba(120,110,80,0.35)';
         [[-30, -20, 18], [25, 15, 24], [-10, 40, 12], [40, -35, 10]].forEach(([dx, dy, r]) => { g.beginPath(); g.arc(x + dx, y + dy, r, 0, 6.3); g.fill(); });
         g.fillStyle = '#111'; g.beginPath(); g.arc(x - 22, y - 5, 4, 0, 6.3); g.arc(x + 12, y - 5, 4, 0, 6.3); g.fill(); g.fillRect(x - 14, y + 18, 28, 3); // ムーンの顔
       }, 0.7);
       decor(1450, (_, y) => { // 惑星
+        if (dimg('planet', W * 0.3, y, -0.2)) return;
         const x = W * 0.3; const rg = g.createRadialGradient(x - 30, y - 30, 10, x, y, 130); rg.addColorStop(0, '#ffb86b'); rg.addColorStop(1, '#a8325e');
         g.fillStyle = rg; g.beginPath(); g.arc(x, y, 110, 0, 6.3); g.fill();
         g.strokeStyle = 'rgba(255,230,180,0.7)'; g.lineWidth = 8; g.beginPath(); g.ellipse(x, y, 190, 36, -0.35, 0, 6.3); g.stroke();

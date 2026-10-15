@@ -12,14 +12,23 @@ export interface Layout {
   kx: number; ky: number; px: number; py: number; tipX: number; tipY: number; s: number; poster: boolean;
 }
 /** ゲーム/リプレイ用(ボトルあり) と ポスター用(皿を中央に大きく) */
+/** 背景写真の配置。ゲーム/リプレイ=右寄せ cover、ポスター=皿の中央を画面中央へ寄せて少しズーム */
+function bgPlace(w: number, h: number, poster: boolean) {
+  const b = KI.bg!, base = Math.max(w / b.width, h / b.height), sc = base * (poster && h > w ? 1.5 : 1), dw = b.width * sc, dh = b.height * sc;
+  const cl = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+  const ox = poster ? cl(w * 0.5 - 0.70 * dw, w - dw, 0) : w - dw, oy = poster ? cl(h * 0.55 - 0.485 * dh, h - dh, 0) : (h - dh) * 0.5;
+  return { ox, oy, dw, dh };
+}
+/** ゲーム/リプレイ用(ボトルあり) と ポスター用(皿を中央に大きく) */
 export function layoutFor(w: number, h: number, poster = false): Layout {
   let cx = w / 2;
   let rx: number, cy: number;
-  if (!poster && KI.bg) {
+  if (KI.bg) {
     // 背景写真の皿(真上から・円形)のきれいな中央に合わせる。ふちぎわのポテトを避ける
-    const b = KI.bg, sc = Math.max(w / b.width, h / b.height), dw = b.width * sc, dh = b.height * sc;
-    cx = w - dw + 0.70 * dw; cy = (h - dh) * 0.5 + 0.485 * dh;
+    const { ox, oy, dw, dh } = bgPlace(w, h, poster);
+    cx = ox + 0.70 * dw; cy = oy + 0.485 * dh;
     rx = Math.min(0.29 * dw * 0.95, w * 0.44);
+    if (poster) { rx = Math.min(rx, cx - 4, w - cx - 4, cy - 4, h - cy - 4); }
     const kx = rx / CFG.plateR, ky = kx, s = rx / 165, px = cx, py = cy;
     return { w, h, cx, cy, rx, ry: rx, kx, ky, px, py, tipX: px, tipY: py - rx * 0.82, s, poster };
   }
@@ -39,12 +48,14 @@ export function buildBackdrop(L: Layout, scale: number): HTMLCanvasElement {
   const c = document.createElement('canvas'); c.width = Math.max(2, Math.round(L.w * scale)); c.height = Math.max(2, Math.round(L.h * scale));
   const g = c.getContext('2d')!; g.scale(scale, scale);
   const { w, h, cx, cy, rx, ry } = L;
-  if (!L.poster && KI.bg) {
-    const b = KI.bg, sc = Math.max(w / b.width, h / b.height);
-    g.drawImage(b, w - b.width * sc, (h - b.height * sc) * 0.5, b.width * sc, b.height * sc);
-    // 上部のHUD文字が読めるよう暗幕を薄く
-    const gr = g.createLinearGradient(0, 0, 0, h * 0.2); gr.addColorStop(0, 'rgba(20,10,4,.35)'); gr.addColorStop(1, 'rgba(20,10,4,0)');
-    g.fillStyle = gr; g.fillRect(0, 0, w, h * 0.2);
+  if (KI.bg) {
+    const b = KI.bg, { ox, oy, dw, dh } = bgPlace(w, h, L.poster);
+    g.drawImage(b, ox, oy, dw, dh);
+    // 上部の文字・HUD/下部の文字が読めるよう暗幕を薄く
+    const top = L.poster ? 0.3 : 0.2;
+    let gr = g.createLinearGradient(0, 0, 0, h * top); gr.addColorStop(0, `rgba(20,10,4,${L.poster ? 0.6 : 0.35})`); gr.addColorStop(1, 'rgba(20,10,4,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, w, h * top);
+    if (L.poster) { gr = g.createLinearGradient(0, h * 0.78, 0, h); gr.addColorStop(0, 'rgba(20,10,4,0)'); gr.addColorStop(1, 'rgba(20,10,4,0.62)'); g.fillStyle = gr; g.fillRect(0, h * 0.78, w, h * 0.22); }
     return c;
   }
   // カウンター(淡い面)

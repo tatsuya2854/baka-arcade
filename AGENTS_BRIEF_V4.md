@@ -1,0 +1,6 @@
+# 結果アート（ResultArt.draw / replay.draw）の写真化ブリーフ
+背景: 結果画面と共有ポスターに出る「今回の結果イラスト」(各ゲームの art.ts または index.ts 内の art.draw / replay.draw)が、旧来のベクター/トゥーン描画のまま残り、実写の背景・主役画像(AGENTS_BRIEF_V3.md 参照、`src/core/images.ts`)とタッチが合わない。ゲーム内は既に写真化済み。結果アートも同じ世界観にそろえる。
+やること: 担当ゲームの結果アートを、そのゲームの bg / hero / item 画像（必要なら hand_* 等）を使って再構成する。結果の中身(称号・数値・どこに落ちたか・何枚積んだか等の「その人だけの結果」)は維持し、背景を bg 画像(drawCover)、物体を画像スプライトにする。文字は読みやすさ最優先（太く、黒縁か暗幕）。重なり・はみ出しなし。アスペクト比が 4:5〜1:1〜16:9 に変わっても破綻しないこと（w,h から計算）。
+画像の読み込み: draw は同期なので、ゲーム側で既に先読みしたキャッシュを再利用するか、結果生成時(finish 直前)に `loadImg` を Promise で先読みしておく。未読込(null)の間は従来描画にフォールバック。毎フレーム new / ctx.filter / shadowBlur は避ける（静的な背景はオフスクリーン canvas に1回描いて使い回す）。
+確認: 担当ごとに別ポートで `npx vite --port <番号>`、`/dev.html?game=<フォルダ名>` でプレイ→結果画面を Playwright(iPhone 13)で撮影し Read で見る。共有ポスターの比率(1080x1350 など)でも art.draw を呼んで見た目を確認すること（`window.__result.art.draw` を任意サイズの canvas に描いて保存してよい）。スクリーンショットは `/private/tmp/claude-501/-Users-sasakitatsuya-Developer-apps-----/91786307-fb30-4b12-8065-c659003c545b/scratchpad/<自分の名前>/` に保存（他エージェントと混ぜない）。`npm run typecheck` が通ること。
+制約: 編集は担当ゲームの `src/games/<id>/` のみ（meta.ts は編集禁止）。core/ ui/ worker/ art/ public/ は読み取りのみ。ゲームロジック・スコア・難易度は変えない。コミットしない。見ていないものを「確認した」と書かない。報告は簡潔に（置換内容／残した旧描画と理由／確認方法と所見／未解決）。
