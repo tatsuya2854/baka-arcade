@@ -112,7 +112,7 @@ export function renderPlay(app: HTMLElement, id: string, challenge?: Challenge):
       <div class="next">${recs.map(x => card(x)).join('')}</div>
       <button class="link" id="home">ホームへ戻る</button></div>`;
     // 結果アートを大きく表示（何も操作しなくても動く）
-    const cv = layer.querySelector<HTMLCanvasElement>('#art')!, dpr = Math.min(2, devicePixelRatio || 1), cw = Math.min(innerWidth - 40, 420), ch = Math.round(Math.min(cw * 0.9, innerHeight * 0.34));
+    const cv = layer.querySelector<HTMLCanvasElement>('#art')!, dpr = Math.min(2, devicePixelRatio || 1), cw = Math.min(innerWidth - 40, 420), ch = Math.round(Math.min(cw * 0.8, innerHeight * 0.28));
     cv.width = cw * dpr; cv.height = ch * dpr; cv.style.width = cw + 'px'; cv.style.height = ch + 'px';
     const g = cv.getContext('2d')!; let rpStart = 0, replaying = false; const t0 = performance.now();
     const loop = () => {
