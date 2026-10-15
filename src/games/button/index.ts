@@ -240,8 +240,8 @@ const mod: GameModule = {
       if (S.dim > 0) { const sp = g.createRadialGradient(G.btn.x, G.btn.y, G.btn.r * 1.2, G.btn.x, G.btn.y, G.btn.r * 2.4); sp.addColorStop(0, 'rgba(0,0,0,0)'); sp.addColorStop(1, `rgba(0,0,0,${S.dim})`); g.fillStyle = sp; g.fillRect(-W, -H, W * 3, H * 3); }
       g.restore();
       const rem = started ? Math.max(0, Math.ceil(C.roundSec - (performance.now() - startMs) / 1000)) : C.roundSec;
-      txt(g, `押下 ${data.total}`, 14, 22, 18, '#fff', '#000', 'left'); txt(g, `発見 ${found.size}/${EVENTS.length}`, 14, 46, 15, '#9ef', '#000', 'left');
-      txt(g, `⏱ ${rem}`, W - 14, 22, 22, rem <= 10 ? '#ff6b6b' : '#fff', '#000', 'right'); txt(g, `今回 +${newCount}`, W - 14, 46, 14, '#7be07b', '#000', 'right');
+      txt(g, `押下 ${data.total}`, 62, 28, 18, '#fff', '#000', 'left'); txt(g, `発見 ${found.size}/${EVENTS.length}`, 62, 52, 15, '#9ef', '#000', 'left');
+      txt(g, `${rem}s`, W - 62, 28, 22, rem <= 10 ? '#ff6b6b' : '#fff', '#000', 'right'); txt(g, `今回 +${newCount}`, W - 62, 52, 14, '#7be07b', '#000', 'right');
       for (const f of fxs) f.drawHud?.(g, Math.min(1, f.t / f.dur));
       g.fillStyle = 'rgba(255,255,255,.12)'; g.fillRect(W / 2 - 60, H - 66, 120, 44); g.strokeStyle = 'rgba(255,255,255,.5)'; g.strokeRect(W / 2 - 60, H - 66, 120, 44); txt(g, '図鑑', W / 2, H - 44, 18, '#fff', '');
       if (finished) { g.fillStyle = 'rgba(0,0,0,.5)'; g.fillRect(0, 0, W, H); txt(g, endedByEnding ? 'THE END' : 'TIME UP!', W / 2, H / 2, 54, '#ffd93d'); }

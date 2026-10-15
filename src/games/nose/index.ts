@@ -551,8 +551,8 @@ const mod: GameModule = {
       // HUD
       text(`${score}点`, W / 2, 48, 42, '#fff');
       text(`STAGE ${stage}${cfg.special ? ' ★超ロング★' : ''}`, W / 2, 90, 22, cfg.special ? '#ffe14d' : '#ffe9c8');
-      for (let i = 0; i < LIVES; i++) text(i < lives ? '❤' : '♡', 34 + i * 34, 40, 30, i < lives ? '#ff5470' : '#aaa');
-      if (combo >= 2) text(`${combo} COMBO`, W - 76, 40, 24, '#5dffb0');
+      for (let i = 0; i < LIVES; i++) text(i < lives ? '❤' : '♡', 84 + i * 30, 112, 26, i < lives ? '#ff5470' : '#aaa');
+      if (combo >= 2) text(`${combo} COMBO`, W - 80, 112, 22, '#5dffb0');
 
       // ゲージ
       let vis = 1;
