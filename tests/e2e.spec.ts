@@ -8,7 +8,7 @@ const play: Record<string, (p: Page) => Promise<void>> = {
   ketchup: async p => { await p.mouse.move(195, 400); await p.mouse.down(); await p.waitForTimeout(1500); await p.mouse.up(); },
   tissue: async p => { await p.mouse.move(195, 520); await p.mouse.down(); await p.mouse.move(195, 300, { steps: 14 }); await p.mouse.up(); },
   stack: async p => { for (let i = 0; i < 40 && !(await p.locator('.res').count()); i++) { await p.mouse.click(195, 400); await p.waitForTimeout(700); } },
-  fart: async p => { await p.mouse.click(195, 400); },
+  fart: async p => { for (let i = 0; i < 6; i++) { await p.mouse.click(195, 400); await p.waitForTimeout(500); } }, // 画像の先読み完了前の入力は無視されるので、数回タップする
   hair: async p => { await p.mouse.move(195, 420); await p.mouse.down(); },
   nose: async p => { for (let i = 0; i < 30 && !(await p.locator('.res').count()); i++) { await p.mouse.move(195, 420); await p.mouse.down(); await p.waitForTimeout(60); await p.mouse.up(); await p.waitForTimeout(900); } },
   button: async p => { for (let i = 0; i < 400 && !(await p.locator('.res').count()); i++) { const v = p.viewportSize()!; await p.mouse.click(v.width / 2, v.height / 2); await p.waitForTimeout(190); } },
