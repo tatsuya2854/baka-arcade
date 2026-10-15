@@ -3,12 +3,27 @@ import { loadImg } from '../../core/images';
 
 const SLUG = 'toothpaste-10cm';
 /** 生成画像(読めなければ null=旧描画にフォールバック)。モジュール共有 */
-export const TI: { bg: HTMLImageElement | null; hero: HTMLImageElement | null } = { bg: null, hero: null };
+export const TI: { bg: HTMLImageElement | null; hero: HTMLImageElement | null; hand: HTMLImageElement | null } = { bg: null, hero: null, hand: null };
 let tiP: Promise<void> | null = null;
-export const loadToothpasteImgs = (): Promise<void> => (tiP ??= Promise.all([loadImg(SLUG, 'bg'), loadImg(SLUG, 'hero')]).then(([b, h]) => { TI.bg = b; TI.hero = h; }));
+export const loadToothpasteImgs = (): Promise<void> => (tiP ??= Promise.all([loadImg(SLUG, 'bg'), loadImg(SLUG, 'hero'), loadImg(SLUG, 'hand_press')]).then(([b, h, hd]) => { TI.bg = b; TI.hero = h; TI.hand = hd; }));
+/** 画像の縁(袖口の切れ目)を透明にフェードさせたオフスクリーンを作る。e = 上,右,下,左 の割合 */
+function fadedHand(im: HTMLImageElement, W: number, e: [number, number, number, number]): HTMLCanvasElement {
+  const c = document.createElement('canvas'); c.width = W; c.height = Math.round(W * im.height / im.width);
+  const q = c.getContext('2d')!; q.drawImage(im, 0, 0, c.width, c.height); q.globalCompositeOperation = 'destination-out';
+  const edge = (x0: number, y0: number, x1: number, y1: number, rx: number, ry: number, rw: number, rh: number) => {
+    const gr = q.createLinearGradient(x0, y0, x1, y1); gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); q.fillStyle = gr; q.fillRect(rx, ry, rw, rh);
+  };
+  const w = c.width, h = c.height;
+  if (e[0]) edge(0, 0, 0, h * e[0], 0, 0, w, h * e[0]);
+  if (e[2]) edge(0, h, 0, h * (1 - e[2]), 0, h * (1 - e[2]), w, h * e[2]);
+  if (e[1]) edge(w, 0, w * (1 - e[1]), 0, w * (1 - e[1]), 0, w * e[1], h);
+  if (e[3]) edge(0, 0, w * e[3], 0, 0, 0, w * e[3], h);
+  return c;
+}
+let handC: HTMLCanvasElement | null = null;
 // 背景は静的なのでオフスクリーンに1回だけ描いて使い回す
 let bgCv: HTMLCanvasElement | null = null;
-export const releaseBg = () => { bgCv = null; };
+export const releaseBg = () => { bgCv = null; handC = null; };
 function bgCanvas(w: number, h: number): HTMLCanvasElement {
   if (bgCv && bgCv.width === w && bgCv.height === h) return bgCv;
   const c = bgCv && bgCv.width === w && bgCv.height === h ? bgCv : document.createElement('canvas'); c.width = w; c.height = h;
@@ -312,6 +327,13 @@ function drawTube(g: CanvasRenderingContext2D, s: Scene, t: number) {
   }
   // 指
   const tipY = mid, fy = [tipY, tipY + 16];
+  if (TI.hand) { // 実写の手: 指先をチューブ右側面に当て、押し込みに合わせて食い込ませる
+    const hd = (handC ??= fadedHand(TI.hand, 540, [0.06, 0, 0, 0])), Hs = 250, tx = hw(mid) - 4 - sq * 7, ty = mid + 4;
+    g.save(); g.translate(tx, ty);
+    g.rotate(Math.PI / 2); g.imageSmoothingQuality = 'high';
+    g.drawImage(hd, -0.56 * Hs, -0.9 * Hs, Hs, Hs * hd.height / hd.width);
+    g.restore(); void t; return;
+  }
   for (let k = 0; k < 2; k++) {
     const side = k === 0 ? 1 : -1, rx = 17, ry = 27;
     const cx = side * (hw(fy[k]) + rx - 4 + (1 - sq) * 6);

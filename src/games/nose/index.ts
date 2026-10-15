@@ -106,7 +106,7 @@ const mod: GameModule = {
     };
     // ---- 生成画像（bg=洗面所背景 / hero=ピンセット / item=毛）。無ければ従来描画にフォールバック ----
     const SLUG = 'nosehair-pull';
-    let imgBg: HTMLImageElement | null = null, imgTw: HTMLImageElement | null = null;
+    let imgBg: HTMLImageElement | null = null, imgTw: HTMLImageElement | null = null, imgFace: HTMLImageElement | null = null, blobOff: HTMLCanvasElement | null = null;
     let bgOff: HTMLCanvasElement | null = null, twShadow: HTMLCanvasElement | null = null;
     const buildBgOff = () => {
       if (!imgBg || !W) return;
@@ -120,9 +120,13 @@ const mod: GameModule = {
     resize();
     const onResize = () => { resize(); buildBgOff(); };
     window.addEventListener('resize', onResize);
-    Promise.all([loadImg(SLUG, 'bg'), loadImg(SLUG, 'hero')]).then(([b, t]) => {
+    Promise.all([loadImg(SLUG, 'bg'), loadImg(SLUG, 'hero'), loadImg(SLUG, 'hero_face')]).then(([b, t, f]) => {
       if (destroyed) return;
-      imgBg = b; imgTw = t; buildBgOff();
+      imgBg = b; imgTw = t; imgFace = f; buildBgOff();
+      if (f) { // 赤み用のぼかし円（1回だけ作る）
+        const c = blobOff = document.createElement('canvas'); c.width = c.height = 64; const q = c.getContext('2d')!;
+        const rg = q.createRadialGradient(32, 32, 0, 32, 32, 32); rg.addColorStop(0, 'rgba(225,50,60,1)'); rg.addColorStop(1, 'rgba(225,50,60,0)'); q.fillStyle = rg; q.fillRect(0, 0, 64, 64);
+      }
       if (t) { // ピンセットの接地影（シルエットを1回だけ作る）
         const c = twShadow = document.createElement('canvas'); c.width = t.width; c.height = t.height;
         const q = c.getContext('2d')!; q.drawImage(t, 0, 0); q.globalCompositeOperation = 'source-in'; q.fillStyle = '#1a2538'; q.fillRect(0, 0, c.width, c.height);
@@ -230,10 +234,61 @@ const mod: GameModule = {
     }
 
     // ---- 顔の幾何 ----
+    const useFace = () => use3d && !!imgFace;
+    // 実写顔画像(1024四方)上の位置（割合）。鼻の穴(左)・両目・頬は hero_face.png から読み取った値
+    const FK = { nosX: 0.52, nosY: 0.604, nostrilX: 0.49, nostrilY: 0.605, eyeY: 0.462, eyeLX: 0.415, eyeRX: 0.61, cheekY: 0.56, scale: 3.3, pivY: 0.93 };
+    /** 痛みの姿勢（傾き・つぶれ・拡大）。顔画像・鼻毛の根元・ピンセットで共通に使う */
+    function pose() {
+      let pain = 0, tilt = 0, sy = 1, sx = 1;
+      if (phase === 'pull') { pain = gauge; tilt = gauge * 0.1 + Math.sin(time * 28) * 0.012 * gauge * gauge; sy = 1 + gauge * 0.04; sx = 1 - gauge * 0.03; }
+      else if (phase === 'react') {
+        if (reactOk) { pain = Math.max(0, 0.45 - reactT * 0.5); tilt = Math.sin(reactT * 14) * 0.06 * Math.max(0, 1 - reactT); sy = 1 + Math.max(0, 0.05 - reactT * 0.1); }
+        else { const k = Math.max(0, 1 - reactT / 1.2); pain = 0.75 * k; tilt = Math.sin(reactT * 25) * 0.05 * k + 0.06 * k; sy = 1 - 0.03 * k; sx = 1 + 0.03 * k; }
+      } else if (phase === 'over') { pain = 0.6; tilt = 0.05; sy = 0.98; sx = 1.02; }
+      return { pain, tilt, sx, sy };
+    }
     function geom() {
       const hx = W / 2, hy = H * 0.4, rx = Math.min(W * 0.46, H * 0.27), ry = rx * 1.15;
       const nr = rx * 0.24, nx = hx, ny = hy + ry * 0.2;
-      return { hx, hy, rx, ry, nr, nx, ny, rootX: nx - nr * 0.3, rootY: ny + nr * 0.5 };
+      if (useFace()) {
+        const S = rx * FK.scale, ax = nx, ay = ny + nr * 0.5, ix = ax - FK.nosX * S, iy = ay - FK.nosY * S;
+        const pv = { x: ax, y: iy + FK.pivY * S }, ps = pose();
+        const px = ix + FK.nostrilX * S - pv.x, py = iy + FK.nostrilY * S - pv.y, sx = px * ps.sx, sy = py * ps.sy, c = Math.cos(ps.tilt), s = Math.sin(ps.tilt);
+        return { hx, hy, rx, ry, nr, nx, ny, rootX: pv.x + sx * c - sy * s, rootY: pv.y + sx * s + sy * c, S, ix, iy, pvx: pv.x, pvy: pv.y };
+      }
+      return { hx, hy, rx, ry, nr, nx, ny, rootX: nx - nr * 0.3, rootY: ny + nr * 0.5, S: 0, ix: 0, iy: 0, pvx: 0, pvy: 0 };
+    }
+    /** 実写の顔を背景レイヤへ描く。痛みは傾き・つぶれ・赤み・涙で表現（ズーム変換済み前提） */
+    function drawFaceImg(c: CanvasRenderingContext2D, G: ReturnType<typeof geom>) {
+      const img = imgFace!, ps = pose(), S = G.S;
+      c.save(); c.translate(G.pvx, G.pvy); c.rotate(ps.tilt); c.scale(ps.sx, ps.sy); c.translate(-G.pvx, -G.pvy);
+      // 首の下に服（暗めの襟）。首の付け根を隠す
+      const by = G.iy + 0.9 * S;
+      c.fillStyle = '#26364d'; c.beginPath(); c.ellipse(G.hx, by + S * 0.14, S * 0.46, S * 0.17, 0, Math.PI, 0); c.rect(G.hx - S * 0.46, by + S * 0.14, S * 0.92, S * 0.6); c.fill();
+      c.drawImage(img, G.ix, G.iy, S, S);
+      // 首の下端を暗く落として服になじませる
+      const ng = c.createLinearGradient(0, by - S * 0.04, 0, by + S * 0.05); ng.addColorStop(0, 'rgba(38,54,77,0)'); ng.addColorStop(1, 'rgba(38,54,77,.95)');
+      c.fillStyle = ng; c.fillRect(G.ix + S * 0.1, by - S * 0.04, S * 0.8, S * 0.09); c.fillStyle = '#26364d'; c.fillRect(G.ix + S * 0.1, by + S * 0.05 - 0.5, S * 0.8, S * 0.12);
+      // 赤み（目の周り・鼻・頬）
+      const p = clamp(ps.pain, 0, 1);
+      if (blobOff && p > 0.05) {
+        const b = (fx: number, fy: number, rr: number, a: number) => { c.globalAlpha = clamp(a * p, 0, 0.7); c.drawImage(blobOff!, G.ix + fx * S - rr, G.iy + fy * S - rr, rr * 2, rr * 2); };
+        b(FK.eyeLX, FK.eyeY + 0.01, S * 0.075, 0.55); b(FK.eyeRX, FK.eyeY + 0.01, S * 0.075, 0.55);
+        b(FK.nosX, 0.585, S * 0.075, 0.8); b(0.33, FK.cheekY, S * 0.08, 0.45); b(0.71, FK.cheekY, S * 0.08, 0.45); b(0.5, 0.33, S * 0.12, 0.25);
+        c.globalAlpha = 1;
+      }
+      // 涙・汗
+      const cry = p > 0.55 || phase === 'over' || (phase === 'react' && !reactOk);
+      if (cry) {
+        c.fillStyle = 'rgba(150,215,255,.85)';
+        for (const sx2 of [FK.eyeLX, FK.eyeRX]) for (let k = 0; k < 2; k++) {
+          const f = (time * 1.1 + k * 0.5 + (sx2 > 0.5 ? 0.2 : 0)) % 1, x = G.ix + (sx2 + (sx2 > 0.5 ? 0.02 : -0.02)) * S, y = G.iy + (FK.eyeY + 0.03 + f * 0.09) * S;
+          c.globalAlpha = 1 - f; c.beginPath(); c.ellipse(x, y, S * 0.007, S * 0.012, 0, 0, 7); c.fill();
+        }
+        c.globalAlpha = 1;
+      }
+      if (p > 0.3 && phase !== 'react') { const f = (time * 1.6) % 1; c.fillStyle = 'rgba(170,225,255,.9)'; c.globalAlpha = 1 - f * 0.6; c.beginPath(); c.ellipse(G.ix + 0.76 * S, G.iy + (0.22 + f * 0.1) * S, S * 0.009, S * 0.016, 0, 0, 7); c.fill(); c.globalAlpha = 1; }
+      c.restore();
     }
     /** 毛の先端(つまむ手)の位置。gg=ゲージ, back=戻りスプリング用の長さ補正 */
     function tipPos(gg: number, _t: number, lenOverride?: number) {
@@ -386,6 +441,7 @@ const mod: GameModule = {
     function setup3d(G: ReturnType<typeof geom>, zoom: number, sx: number, sy: number) {
       const p = fp; p.W = W; p.H = H; p.hx = G.hx; p.hy = G.hy; p.rx = G.rx; p.ry = G.ry; p.nr = G.nr; p.nx = G.nx; p.ny = G.ny; p.time = time;
       p.zoom = zoom; p.ox = sx; p.oy = sy; p.hairKind = 0; p.fly = 0; p.hand = true; p.noHand = !!imgTw; p.waves = cfg.waves; p.tilt = 0; p.flick = 0; p.lookX = 0;
+      p.img = useFace(); p.rootX = G.rootX; p.rootY = G.rootY;
       const tiltOf = (pg: number) => pg * 0.06 * Math.sin(1) + (reactOk && phase === 'react' ? Math.sin(reactT * 14) * 0.05 * Math.max(0, 1 - reactT) : 0);
       if (phase === 'pull') {
         const hh = tipPos(gauge, 0), ex = exprOf(gauge);
@@ -448,6 +504,7 @@ const mod: GameModule = {
       const zoom = 1 + (phase === 'pull' ? gauge * 0.1 : 0) + (phase === 'react' && reactOk ? Math.max(0, 0.15 - reactT * 0.2) : 0);
       const shk = (phase === 'pull' ? gauge * gauge * 7 : 0) + shakeT * 14;
       const shx = (Math.random() - 0.5) * shk, shy = (Math.random() - 0.5) * shk;
+      if (useFace() && gb !== g) { gb.save(); gb.translate(G.nx + shx, G.ny + shy); gb.scale(zoom, zoom); gb.translate(-G.nx, -G.ny); drawFaceImg(gb, G); gb.restore(); }
       g.save();
       g.translate(G.nx + shx, G.ny + shy); g.scale(zoom, zoom); g.translate(-G.nx, -G.ny);
 
@@ -566,7 +623,7 @@ const mod: GameModule = {
         window.removeEventListener('keydown', onKeyD); window.removeEventListener('keyup', onKeyU);
         cv.removeEventListener('pointerdown', onDown);
         delete (window as any).__nose;
-        cv.remove(); bgCv?.remove(); bgOff = null; twShadow = null; imgBg = null; imgTw = null;
+        cv.remove(); bgCv?.remove(); bgOff = null; twShadow = null; imgBg = null; imgTw = null; imgFace = null; blobOff = null;
         if (stage3d) { stage3d.dispose(); stage3d = null; } use3d = false;
       },
     };

@@ -1,14 +1,48 @@
 {
   "style": "Photorealistic commercial photography, premium advertising quality, 85mm lens, soft natural key light with believable contact shadows, real material textures and specular highlights, shallow depth of field, subtle film grain. Strictly NO text, NO letters, NO numbers, NO logos, NO watermark, NO emoji, NO cartoon, NO illustration, NO sticker or stamp look, NO plastic CGI look.",
   "kinds": {
-    "key":    { "size": "1024x1536", "ratio": "2:3 vertical", "alpha": false, "tpl": "Vertical 2:3 key visual for a mobile game. The hero subject is large (about 60% of the frame), placed slightly below center. Leave the top 25% of the frame calm and uncluttered for a title overlay. Subject: {subject}" },
-    "bg":     { "size": "1024x1536", "ratio": "2:3 vertical", "alpha": false, "tpl": "Vertical 2:3 background plate for gameplay. The hero object is NOT present. The central 50% of the frame stays calm and uncluttered so game objects can move over it. Scene: {subject}" },
-    "hero":   { "size": "1024x1024", "ratio": "1:1", "alpha": true,  "tpl": "One single isolated object, fully visible with generous margin, centered, no cropping. Transparent background (alpha PNG). If transparency is not supported, use a pure flat white #FFFFFF background and no floor shadow. Subject: {subject}" },
-    "item":   { "size": "1024x1024", "ratio": "1:1", "alpha": true,  "tpl": "One single isolated object, fully visible with generous margin, centered, no cropping. Transparent background (alpha PNG). If transparency is not supported, use a pure flat white #FFFFFF background and no floor shadow. Subject: {subject}" },
-    "result": { "size": "1536x1024", "ratio": "3:2 landscape", "alpha": false, "tpl": "Landscape 3:2 photograph of an absurd-but-photorealistic outcome, shot like a serious news photo. Keep the center-left calm for a score overlay. Scene: {subject}" }
+    "key": {
+      "size": "1024x1536",
+      "ratio": "2:3 vertical",
+      "alpha": false,
+      "tpl": "Vertical 2:3 key visual for a mobile game. The hero subject is large (about 60% of the frame), placed slightly below center. Leave the top 25% of the frame calm and uncluttered for a title overlay. Subject: {subject}"
+    },
+    "bg": {
+      "size": "1024x1536",
+      "ratio": "2:3 vertical",
+      "alpha": false,
+      "tpl": "Vertical 2:3 background plate for gameplay. The hero object is NOT present. The central 50% of the frame stays calm and uncluttered so game objects can move over it. Scene: {subject}"
+    },
+    "hero": {
+      "size": "1024x1024",
+      "ratio": "1:1",
+      "alpha": true,
+      "tpl": "One single isolated object, fully visible with generous margin, centered, no cropping. Transparent background (alpha PNG). If transparency is not supported, use a pure flat white #FFFFFF background and no floor shadow. Subject: {subject}"
+    },
+    "item": {
+      "size": "1024x1024",
+      "ratio": "1:1",
+      "alpha": true,
+      "tpl": "One single isolated object, fully visible with generous margin, centered, no cropping. Transparent background (alpha PNG). If transparency is not supported, use a pure flat white #FFFFFF background and no floor shadow. Subject: {subject}"
+    },
+    "result": {
+      "size": "1536x1024",
+      "ratio": "3:2 landscape",
+      "alpha": false,
+      "tpl": "Landscape 3:2 photograph of an absurd-but-photorealistic outcome, shot like a serious news photo. Keep the center-left calm for a score overlay. Scene: {subject}"
+    },
+    "hand": {
+      "size": "1024x1024",
+      "ratio": "1:1",
+      "alpha": true,
+      "tpl": "One single isolated object, fully visible with generous margin, centered, no cropping. Transparent background (alpha PNG). If transparency is not supported, use a pure flat white #FFFFFF background and no floor shadow. Subject: {subject}"
+    }
   },
   "games": {
-    "ojisan-stack": { "title": "おじさんを積め！", "world": "concrete rooftop terrace of an office building at golden hour, hazy city skyline", "light": "warm low sun from the left, long soft shadows",
+    "ojisan-stack": {
+      "title": "おじさんを積め！",
+      "world": "concrete rooftop terrace of an office building at golden hour, hazy city skyline",
+      "light": "warm low sun from the left, long soft shadows",
       "slots": {
         "key": "five ordinary middle-aged Japanese office workers in rumpled suits balancing precariously stacked on each other's shoulders on a narrow steel beam, wobbling, calm deadpan faces",
         "bg": "empty rooftop with a narrow steel beam platform in the lower third, golden-hour city skyline, light haze",
@@ -16,8 +50,12 @@
         "item": "a heavyset middle-aged Japanese office worker in a straining white shirt and tie, full body, standing, slightly sweating",
         "result_good": "a towering human stack of salarymen on a rooftop reaching toward the clouds, workers at the bottom grimacing",
         "result_bad": "a pile of tangled salarymen collapsed on a rooftop, briefcases and shoes scattered, dust in the air"
-      } },
-    "fart-elevator": { "title": "おならエレベーター", "world": "a vivid blue sky above a quiet suburban rooftop, thin clouds, becoming deep space at the top", "light": "bright midday sun from upper right, crisp clouds",
+      }
+    },
+    "fart-elevator": {
+      "title": "おならエレベーター",
+      "world": "a vivid blue sky above a quiet suburban rooftop, thin clouds, becoming deep space at the top",
+      "light": "bright midday sun from upper right, crisp clouds",
       "slots": {
         "key": "a middle-aged Japanese office worker in a suit rocketing straight up through the clouds, hands on his lap in a seated pose, a thick soft plume of pale vapor beneath him, serious face",
         "bg": "vertical sky gradient from pale suburban roofline at the bottom, through scattered clouds, to the dark blue edge of space with stars at the top, no people",
@@ -25,8 +63,12 @@
         "item": "a crow in flight with wings fully spread, seen from slightly below, dark glossy feathers",
         "result_good": "the curved horizon of the Earth seen from orbit with a small tiny salaryman floating, tie drifting",
         "result_bad": "a salaryman lying flat on a suburban rooftop looking at the sky, dignified despair"
-      } },
-    "save-the-hair": { "title": "ハゲを守れ！", "world": "a dark minimal studio with a powerful industrial fan out of frame, drifting dust in strong wind", "light": "hard rim light from behind, cool key from the front",
+      }
+    },
+    "save-the-hair": {
+      "title": "ハゲを守れ！",
+      "world": "a dark minimal studio with a powerful industrial fan out of frame, drifting dust in strong wind",
+      "light": "hard rim light from behind, cool key from the front",
       "slots": {
         "key": "close-up portrait of a bald middle-aged Japanese man with exactly one single long hair on top of his head streaming sideways in a violent wind, eyes tightly focused and tearful",
         "bg": "empty dark studio, strong horizontal wind visible in drifting dust and paper scraps, soft rim light, no people",
@@ -34,17 +76,26 @@
         "item": "macro of a single long black hair strand curving in the air, glossy, in focus",
         "result_good": "a bald man in a gale standing proudly, one hair still intact, hair standing straight in the wind",
         "result_bad": "a single black hair flying away over a city, a bald man's tiny silhouette looking up in the distance"
-      } },
-    "nosehair-pull": { "title": "鼻毛を抜け！", "world": "a clean bright bathroom with a large mirror and a vanity shelf", "light": "bright cool vanity light from above, clinical and honest",
+      }
+    },
+    "nosehair-pull": {
+      "title": "鼻毛を抜け！",
+      "world": "a clean bright bathroom with a large mirror and a vanity shelf",
+      "light": "bright cool vanity light from above, clinical and honest",
       "slots": {
         "key": "extreme close-up of a man's nostril with one long nose hair, shot like a macro beauty ad, a pair of silver tweezers entering from the side",
         "bg": "empty bright bathroom vanity with a mirror reflecting white tiles, shallow depth of field, no people",
         "hero": "silver stainless-steel tweezers, slightly open, 3/4 angle, polished metal reflections",
         "item": "one long dark hair strand stretched taut in a slight curve, macro, glossy",
         "result_good": "a man proudly holding up an absurdly long hair pinched between tweezers in front of a bathroom mirror, serious face",
-        "result_bad": "a man with watering eyes and a red nose in a bathroom mirror, tweezers in hand, pained look"
-      } },
-    "dont-press": { "title": "絶対に押すなボタン", "world": "a minimalist white laboratory room with a single stainless pedestal, subtle yellow-black hazard tape on the floor", "light": "clean overhead softbox light, crisp soft shadows",
+        "result_bad": "a man with watering eyes and a red nose in a bathroom mirror, tweezers in hand, pained look",
+        "hero_face": "front view of a middle-aged Japanese man's face and neck, eyes wide open looking at the camera, nose centered and prominent, mouth closed, neutral skin, head fully visible with a small margin, bright cool bathroom light"
+      }
+    },
+    "dont-press": {
+      "title": "絶対に押すなボタン",
+      "world": "a minimalist white laboratory room with a single stainless pedestal, subtle yellow-black hazard tape on the floor",
+      "light": "clean overhead softbox light, crisp soft shadows",
       "slots": {
         "key": "a huge glossy red industrial push button on a brushed steel pedestal, transparent safety cover flipped open, dramatic ad lighting, no text",
         "bg": "empty minimalist white lab room, a faint hazard-tape line on the concrete floor, no button, no text",
@@ -52,26 +103,40 @@
         "item": "the same large glossy red push button fully pressed down, base visible, 3/4 angle from above, no text",
         "result_good": "the white lab room filled with falling confetti and a startled researcher in a lab coat, shot like a news photo",
         "result_bad": "the same white lab room completely quiet and empty, only the red button sitting on its pedestal, dramatic stillness"
-      } },
-    "egg-landing": { "title": "目玉焼きを落とせ", "world": "a home kitchen stovetop seen from above at a slight angle, wooden counter", "light": "soft window light from the left, warm kitchen tones",
+      }
+    },
+    "egg-landing": {
+      "title": "目玉焼きを落とせ",
+      "world": "a home kitchen stovetop seen from above at a slight angle, wooden counter",
+      "light": "soft window light from the left, warm kitchen tones",
       "slots": {
         "key": "a fresh egg falling in mid-air above a black cast-iron frying pan with a faint oil sheen, the egg slightly cracked, tiny droplets, high-speed photography look",
         "bg": "top-down view of an empty black cast-iron frying pan on a gas stove with an oil sheen, wooden counter around it, no egg",
         "hero": "a single fresh brown-shelled egg, slightly cracked, mid-air, high-speed photography",
         "item": "a perfect sunny-side-up fried egg with a glossy bright yolk, isolated, top view",
         "result_good": "a perfectly centered sunny-side-up egg in a cast-iron pan, overhead, glossy yolk, steam",
-        "result_bad": "an egg splattered across a stovetop far from the pan, yolk sliding down the stove, overhead"
-      } },
-    "toothpaste-10cm": { "title": "歯磨き粉10.0cm", "world": "a white marble bathroom counter, top-down, a precise steel ruler along one edge", "light": "bright cool bathroom light, soft reflections on marble",
+        "result_bad": "an egg splattered across a stovetop far from the pan, yolk sliding down the stove, overhead",
+        "hand_hold": "a right hand holding a brown egg between thumb and index finger from above, the hand and a cuff of a white shirt sleeve coming from the top, egg held at the fingertips, top-down view"
+      }
+    },
+    "toothpaste-10cm": {
+      "title": "歯磨き粉10.0cm",
+      "world": "a white marble bathroom counter, top-down, a precise steel ruler along one edge",
+      "light": "bright cool bathroom light, soft reflections on marble",
       "slots": {
         "key": "a toothbrush with a perfect ribbon of striped toothpaste next to a steel ruler, macro advertising shot, a toothpaste tube behind it",
         "bg": "empty white marble bathroom counter seen from above, a steel ruler along the left edge with millimeter ticks but no numbers, no objects",
         "hero": "a toothpaste tube, squeezed from the bottom, red and white stripes on the cap but no text, 3/4 angle",
         "item": "a clean toothbrush with a ribbon of striped toothpaste, side view, no text",
         "result_good": "a toothpaste ribbon exactly the length of a steel ruler on marble, top-down, calm and precise",
-        "result_bad": "a huge mountain of toothpaste piled over a toothbrush in a sink, absurd amount"
-      } },
-    "usb-insert": { "title": "USBを一発で", "world": "a dim desk at night with a laptop, a lamp, macro depth of field", "light": "cool monitor glow plus a warm desk lamp, dramatic",
+        "result_bad": "a huge mountain of toothpaste piled over a toothbrush in a sink, absurd amount",
+        "hand_press": "ONLY a right hand and wrist, seen from directly above, with the thumb and index finger pressing downward together as if squeezing something, natural skin, short clean nails, white shirt cuff at the top edge. The hand is completely isolated: no tube, no board, no marble, no ruler, no other objects, nothing under the hand."
+      }
+    },
+    "usb-insert": {
+      "title": "USBを一発で",
+      "world": "a dim desk at night with a laptop, a lamp, macro depth of field",
+      "light": "cool monitor glow plus a warm desk lamp, dramatic",
       "slots": {
         "key": "a silver USB-A plug approaching the USB port of a laptop in extreme macro, the metal contacts catching the light, tense mood",
         "bg": "empty dark desk at night, laptop edge on the left with its side ports out of focus, warm lamp bokeh, no USB drive",
@@ -79,8 +144,12 @@
         "item": "close-up of a laptop side with a USB-A port, brushed aluminum, port opening clearly visible, front-on, no text",
         "result_good": "a USB drive fully inserted into a laptop in a dim room, a tiny green LED glowing, satisfying click moment",
         "result_bad": "a person's tired face lit by a laptop screen, USB drive held backward in hand, desk lamp glow"
-      } },
-    "ketchup-pour": { "title": "ケチャップ黄金比", "world": "a diner table with a white plate of French fries, shot from slightly above", "light": "warm overhead pendant light, glossy highlights on sauce",
+      }
+    },
+    "ketchup-pour": {
+      "title": "ケチャップ黄金比",
+      "world": "a diner table with a white plate of French fries, shot from slightly above",
+      "light": "warm overhead pendant light, glossy highlights on sauce",
       "slots": {
         "key": "a plastic ketchup bottle squeezing a thick ribbon of ketchup onto crisp French fries on a white plate, appetizing ad photography, glossy",
         "bg": "top-down view of an empty white plate with a pile of crispy French fries on one side and a clean empty area at the center, diner tabletop",
@@ -88,15 +157,21 @@
         "item": "a small pile of golden crispy French fries, isolated, side-top view",
         "result_good": "a perfectly proportioned ribbon of ketchup on fries, studio food photograph, calm",
         "result_bad": "a plate drowning in a flood of ketchup spilling over the plate edge, overhead"
-      } },
-    "tissue-one": { "title": "ティッシュ1枚だけ", "world": "a calm living room side table, a soft beige wall, a window with sheer curtains", "light": "diffused soft daylight from the right, very airy",
+      }
+    },
+    "tissue-one": {
+      "title": "ティッシュ1枚だけ",
+      "world": "a calm living room side table, a soft beige wall, a window with sheer curtains",
+      "light": "diffused soft daylight from the right, very airy",
       "slots": {
         "key": "a white tissue box on a side table with exactly one tissue sheet rising gracefully from the slot, delicate fabric-like folds, product ad photography",
         "bg": "empty minimal living room side table against a soft beige wall with sheer curtains, a clean empty tabletop, airy",
         "hero": "a white cube tissue box with an oval slot and a single tissue sheet pulled halfway out, 3/4 angle, no text",
         "item": "a single white tissue sheet floating, slightly crumpled and translucent, soft light through it",
         "result_good": "exactly one tissue sheet lying neatly on a table in a calm room, elegant still life",
-        "result_bad": "a snowdrift of tissues erupting out of a tissue box and covering a coffee table and floor"
-      } }
+        "result_bad": "a snowdrift of tissues erupting out of a tissue box and covering a coffee table and floor",
+        "hand_pinch": "a right hand seen from above-right with thumb and index finger pinching an invisible small corner, relaxed natural skin, short clean nails, cuff of a white shirt sleeve at the wrist, fingers pointing up-left"
+      }
+    }
   }
 }

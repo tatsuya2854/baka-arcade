@@ -4,7 +4,7 @@ import { haptic } from '../../core/haptic';
 import { meta } from './meta';
 import { CFG } from './config';
 import { Sim, newSnap, type Snap } from './sim';
-import { drawScene, layout, ensureImgs } from './render';
+import { drawScene, layout, ensureImgs, releaseHand } from './render';
 import { makeArt, pickTitle, type Info } from './art';
 
 /** 紙の擦れる音（ノイズ + バンドパス）。連続音 + 単発のくしゃ音 */
@@ -144,7 +144,7 @@ const mod: GameModule = {
 
     return {
       destroy() {
-        destroyed = true; cancelAnimationFrame(raf); ro.disconnect(); rub?.stop(); audio.stopBgm();
+        destroyed = true; releaseHand(); cancelAnimationFrame(raf); ro.disconnect(); rub?.stop(); audio.stopBgm();
         cv.removeEventListener('pointerdown', onDown); cv.removeEventListener('pointermove', onMove);
         cv.removeEventListener('pointerup', onUp); cv.removeEventListener('pointercancel', onUp); cv.removeEventListener('contextmenu', stopCtx);
         cv.remove();

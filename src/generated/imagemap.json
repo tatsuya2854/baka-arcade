@@ -245,6 +245,16 @@
    "w": 1536,
    "h": 1024,
    "alpha": false
+  },
+  "hero_face": {
+   "v": "f9520841",
+   "widths": [
+    360,
+    720
+   ],
+   "w": 1024,
+   "h": 1024,
+   "alpha": true
   }
  },
  "dont-press": {
@@ -369,6 +379,16 @@
    "w": 1536,
    "h": 1024,
    "alpha": false
+  },
+  "hand_hold": {
+   "v": "e85f7dbc",
+   "widths": [
+    540,
+    1080
+   ],
+   "w": 1024,
+   "h": 1024,
+   "alpha": true
   }
  },
  "toothpaste-10cm": {
@@ -431,6 +451,16 @@
    "w": 1536,
    "h": 1024,
    "alpha": false
+  },
+  "hand_press": {
+   "v": "736871eb",
+   "widths": [
+    540,
+    1080
+   ],
+   "w": 1024,
+   "h": 1024,
+   "alpha": true
   }
  },
  "usb-insert": {
@@ -617,6 +647,16 @@
    "w": 1536,
    "h": 1024,
    "alpha": false
+  },
+  "hand_pinch": {
+   "v": "b786f6b1",
+   "widths": [
+    540,
+    1080
+   ],
+   "w": 1024,
+   "h": 1024,
+   "alpha": true
   }
  }
 }

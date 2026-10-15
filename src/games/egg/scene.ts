@@ -4,11 +4,12 @@ import { loadImg } from '../../core/images';
 
 // 生成画像(無ければ null → 従来の Canvas 描画にフォールバック)
 const SLUG = 'egg-landing';
-const IM: { bg: HTMLImageElement | null; hero: HTMLImageElement | null; item: HTMLImageElement | null } = { bg: null, hero: null, item: null };
+const IM: { bg: HTMLImageElement | null; hero: HTMLImageElement | null; item: HTMLImageElement | null; hand: HTMLImageElement | null } = { bg: null, hero: null, item: null, hand: null };
+let handCv: HTMLCanvasElement | null = null;
 let imPromise: Promise<void> | null = null;
 /** 開始前に先読み。失敗しても resolve する */
 export function preloadEggImages(): Promise<void> {
-  imPromise ??= Promise.all([loadImg(SLUG, 'bg'), loadImg(SLUG, 'hero'), loadImg(SLUG, 'item')]).then(([bg, hero, item]) => { IM.bg = bg; IM.hero = hero; IM.item = item; bgCache.clear(); });
+  imPromise ??= Promise.all([loadImg(SLUG, 'bg'), loadImg(SLUG, 'hero'), loadImg(SLUG, 'item'), loadImg(SLUG, 'hand_hold')]).then(([bg, hero, item, hand]) => { IM.bg = bg; IM.hero = hero; IM.item = item; IM.hand = hand; handCv = null; bgCache.clear(); });
   return imPromise;
 }
 // bg.png(1024x1536)上のフライパン底の中心と半径(px)
@@ -70,7 +71,7 @@ function bgFor(g: CanvasRenderingContext2D, w: number, h: number, gm: Geom): HTM
   }
   return cv;
 }
-export const releaseEggCaches = () => { bgCache.clear(); puff = null; };
+export const releaseEggCaches = () => { bgCache.clear(); puff = null; handCv = null; };
 
 function paintImgBg(c: CanvasRenderingContext2D, img: HTMLImageElement, w: number, h: number, gm: Geom) {
   const { cx, cy, s, k } = gm, R = C.PAN_R;
@@ -188,8 +189,35 @@ function drawShell(g: CanvasRenderingContext2D, x: number, y: number, u: number,
 }
 
 // ---------------- 手 ----------------
+/** 画像の縁(袖口の切れ目)を透明にフェードさせたオフスクリーンを作る。e = 上,右,下,左 の割合 */
+function fadedHand(im: HTMLImageElement, W: number, e: [number, number, number, number]): HTMLCanvasElement {
+  const c = document.createElement('canvas'); c.width = W; c.height = Math.round(W * im.height / im.width);
+  const q = c.getContext('2d')!; q.drawImage(im, 0, 0, c.width, c.height); q.globalCompositeOperation = 'destination-out';
+  const edge = (x0: number, y0: number, x1: number, y1: number, rx: number, ry: number, rw: number, rh: number) => {
+    const gr = q.createLinearGradient(x0, y0, x1, y1); gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); q.fillStyle = gr; q.fillRect(rx, ry, rw, rh);
+  };
+  const w = c.width, h = c.height;
+  if (e[0]) edge(0, 0, 0, h * e[0], 0, 0, w, h * e[0]);
+  if (e[2]) edge(0, h, 0, h * (1 - e[2]), 0, h * (1 - e[2]), w, h * e[2]);
+  if (e[1]) edge(w, 0, w * (1 - e[1]), 0, w * (1 - e[1]), 0, w * e[1], h);
+  if (e[3]) edge(0, 0, w * e[3], 0, 0, 0, w * e[3], h);
+  return c;
+}
+// 実写の手: 画像に写っている卵(中心 635,903 / 半径 ~125x152 / 1254px基準)は消して、卵は既存のhero卵を重ねる
+const HAND_EGG = { x: 635 / 1254, y: 903 / 1254, rx: 132 / 1254, ry: 160 / 1254, hv: 290 / 1254 };
+function handCanvas(): HTMLCanvasElement {
+  if (handCv) return handCv;
+  const W = 540, c = fadedHand(IM.hand!, W, [0.05, 0, 0, 0]), q = c.getContext('2d')!;
+  q.globalCompositeOperation = 'destination-out'; q.fillStyle = '#000'; q.beginPath(); q.ellipse(HAND_EGG.x * W, HAND_EGG.y * W, HAND_EGG.rx * W, HAND_EGG.ry * W, -0.08, 0, TAU); q.fill();
+  return handCv = c;
+}
 function drawHand(g: CanvasRenderingContext2D, x: number, y: number, u: number, open: number, lift: number, alpha: number) {
   if (alpha <= 0.01) return;
+  if (IM.hand) { // 卵の中心(x,y)に画像内の卵を合わせる。離す瞬間は少し引いて開く
+    const hc = handCanvas(), Hs = 2 * C.EGG_B * u / HAND_EGG.hv, a = alpha * (1 - open * 0.25);
+    g.save(); g.globalAlpha = a; g.translate(x + open * 10 * u, y - lift * u - open * 6 * u); g.rotate(open * 0.05);
+    g.drawImage(hc, -HAND_EGG.x * Hs, -HAND_EGG.y * Hs, Hs, Hs * hc.height / hc.width); g.restore(); return;
+  }
   g.save(); g.globalAlpha = alpha; g.translate(0, -lift * u); g.lineCap = 'round';
   // 袖
   const sg = g.createLinearGradient(x - 60 * u, 0, x + 60 * u, 0); sg.addColorStop(0, '#171d26'); sg.addColorStop(0.4, '#3a4657'); sg.addColorStop(1, '#141a22');
@@ -323,11 +351,15 @@ export function drawScene(g: CanvasRenderingContext2D, w: number, h: number, tim
       shadow(o.X, o.Y, o.z + dz);
       const ex = px(gm, o.X), ey = py(gm, o.Y, o.z + C.EGG_B);
       const holding = !dr || tau < 0, rot = holding ? Math.sin(time * 3) * 0.05 : (dr!.rot0 + t0 * 2.2);
+      const hand = () => {
+        if (dr) {
+          const hx = px(gm, dr.X), hy = py(gm, dr.Y, dr.z0 + C.EGG_B), ph = clamp(t0 / 0.14), lift = clamp((t0 - 0.12) / 0.6) ** 2 * 260;
+          drawHand(g, hx, hy, s, ph, lift, 1 - clamp((t0 - 0.35) / 0.3));
+        } else drawHand(g, ex, ey, s, 0, 0, 1);
+      };
+      if (IM.hand) hand(); // 実写の手は卵の下(卵部分は消してある)
       drawShell(g, ex, ey, s, rot, 0, dr && tau > 0 ? 1 + Math.min(0.1, C.G * t0 / 9000) : 1);
-      if (dr) {
-        const hx = px(gm, dr.X), hy = py(gm, dr.Y, dr.z0 + C.EGG_B), ph = clamp(t0 / 0.14), lift = clamp((t0 - 0.12) / 0.6) ** 2 * 260;
-        drawHand(g, hx, hy, s, ph, lift, 1 - clamp((t0 - 0.35) / 0.3));
-      } else drawHand(g, ex, ey, s, 0, 0, 1);
+      if (!IM.hand) hand();
     }
   }
   drawSteam(g, gm, time, S.steam ?? 1);

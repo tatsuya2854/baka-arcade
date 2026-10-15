@@ -3,11 +3,11 @@ import type { Snap } from './sim';
 import { loadImg, drawCover } from '../../core/images';
 
 const SLUG = 'tissue-one';
-const IMG: { bg: HTMLImageElement | null; hero: HTMLImageElement | null; loaded: boolean } = { bg: null, hero: null, loaded: false };
+const IMG: { bg: HTMLImageElement | null; hero: HTMLImageElement | null; hand: HTMLImageElement | null; loaded: boolean } = { bg: null, hero: null, hand: null, loaded: false };
 let loadP: Promise<void> | null = null;
 /** 画像を先読み（1回だけ。失敗/未生成は null のまま=旧描画にフォールバック）。 */
 export function ensureImgs(): Promise<void> {
-  return loadP ??= Promise.all([loadImg(SLUG, 'bg'), loadImg(SLUG, 'hero')]).then(([b, h]) => { IMG.bg = b; IMG.hero = h; IMG.loaded = true; });
+  return loadP ??= Promise.all([loadImg(SLUG, 'bg'), loadImg(SLUG, 'hero'), loadImg(SLUG, 'hand_pinch')]).then(([b, h, hd]) => { IMG.bg = b; IMG.hero = h; IMG.hand = hd; IMG.loaded = true; });
 }
 let bgC: HTMLCanvasElement | null = null, bgKey = '';
 /** 背景はオフスクリーンに1回だけ描いて使い回す */
@@ -110,6 +110,28 @@ function ribbon(g: CanvasRenderingContext2D, lay: Lay, off: (Y: number) => numbe
   g.beginPath(); for (let j = 0; j <= N; j++) { const x = xs[j] + ws[j] / 2; j ? g.lineTo(x, ys[j]) : g.moveTo(x, ys[j]); } g.stroke();
 }
 
+/** 画像の縁(袖口の切れ目)を透明にフェードさせたオフスクリーンを作る。e = 上,右,下,左 の割合 */
+function fadedHand(im: HTMLImageElement, W: number, e: [number, number, number, number]): HTMLCanvasElement {
+  const c = document.createElement('canvas'); c.width = W; c.height = Math.round(W * im.height / im.width);
+  const q = c.getContext('2d')!; q.drawImage(im, 0, 0, c.width, c.height); q.globalCompositeOperation = 'destination-out';
+  const edge = (x0: number, y0: number, x1: number, y1: number, rx: number, ry: number, rw: number, rh: number) => {
+    const gr = q.createLinearGradient(x0, y0, x1, y1); gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); q.fillStyle = gr; q.fillRect(rx, ry, rw, rh);
+  };
+  const w = c.width, h = c.height;
+  if (e[0]) edge(0, 0, 0, h * e[0], 0, 0, w, h * e[0]);
+  if (e[2]) edge(0, h, 0, h * (1 - e[2]), 0, h * (1 - e[2]), w, h * e[2]);
+  if (e[1]) edge(w, 0, w * (1 - e[1]), 0, w * (1 - e[1]), 0, w * e[1], h);
+  if (e[3]) edge(0, 0, w * e[3], 0, 0, 0, w * e[3], h);
+  return c;
+}
+let handC: HTMLCanvasElement | null = null;
+export const releaseHand = () => { handC = null; };
+/** 実写の手: つまむ指先(画像の 21%,19%)を (x,y) に合わせる。r は旧指の半径(=S*0.04) */
+function handPinch(g: CanvasRenderingContext2D, x: number, y: number, S: number, a: number) {
+  const hd = (handC ??= fadedHand(IMG.hand!, 540, [0, 0.07, 0.07, 0])), Hs = S * 0.62;
+  g.save(); g.globalAlpha = a; g.translate(x, y);
+  g.drawImage(hd, -0.215 * Hs, -0.19 * Hs, Hs, Hs * hd.height / hd.width); g.restore();
+}
 function finger(g: CanvasRenderingContext2D, x: number, y: number, r: number, side: number, a: number) {
   g.save(); g.translate(x, y); g.rotate(-side * 0.2); g.globalAlpha = a;
   const len = r * 4.5;
@@ -195,7 +217,7 @@ export function drawScene(g: CanvasRenderingContext2D, w: number, h: number, s: 
     ctxRibbons(g, lay, s, off, amp, time, al);
     if (s.held || s.hint > 0) {
       const px = cx + hx, py = slotY - s.y0 * L, r = lay.S * 0.04;
-      if (s.held) { finger(g, px - r * 0.9, py + r * 0.3, r, -1, 0.95); finger(g, px + r * 0.9, py + r * 0.5, r, 1, 0.95); }
+      if (s.held) { if (IMG.hand) handPinch(g, px, py + r * 0.3, lay.S, 1); else { finger(g, px - r * 0.9, py + r * 0.3, r, -1, 0.95); finger(g, px + r * 0.9, py + r * 0.5, r, 1, 0.95); } }
     }
   }
   if (s.fall >= 0.17 && s.m + 1 < CFG.maxSheets) ribbon(g, lay, (Y) => Y * 0, 0, s.nextY * L, 7.7 + s.m, 0.5, time, {});
@@ -208,7 +230,7 @@ export function drawScene(g: CanvasRenderingContext2D, w: number, h: number, s: 
   if (s.hint > 0) {
     const k = (time % 1.6) / 1.6, e = sm(k < 0.75 ? k / 0.75 : 1), a = (k < 0.75 ? 1 : 1 - (k - 0.75) / 0.25) * s.hint;
     const py = slotY - (CFG.peek + 0.2) * L - e * L * 0.9, r = lay.S * 0.04;
-    finger(g, cx - r * 0.9, py + r * 0.3, r, -1, a * 0.9); finger(g, cx + r * 0.9, py + r * 0.5, r, 1, a * 0.9);
+    if (IMG.hand) handPinch(g, cx, py + r * 0.3, lay.S, a * 0.9); else { finger(g, cx - r * 0.9, py + r * 0.3, r, -1, a * 0.9); finger(g, cx + r * 0.9, py + r * 0.5, r, 1, a * 0.9); }
   }
   if (o.hud) hud(g, lay, s, o);
 }

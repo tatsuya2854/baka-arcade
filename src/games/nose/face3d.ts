@@ -12,6 +12,7 @@ export interface FaceP {
   ox: number; oy: number; zoom: number; lookX: number; flick: number;
   noHand?: boolean; hairKind: number; // 0なし 1つまむ 2戻る/切れ(先端位置のみ)
   tipX: number; tipY: number; amp: number; waves: number; hand: boolean;
+  img?: boolean; rootX?: number; rootY?: number; // 実写顔画像モード: 3D顔は隠し、鼻毛の根元を画面座標(ズーム前)で指定
   fly: number; flyX: number; flyY: number; flyRot: number; // 0なし 1抜けた毛+手 2切れた毛片
 }
 export function newFaceP(): FaceP {
@@ -203,12 +204,14 @@ export class NoseStage3D {
       this.mOpen.position.set(0, my - 4, mz); this.mOpen.scale.set(hw, hh, 7);
       this.tongue.position.set(0, my - 4 - hh * 0.55, mz + 2); this.tongue.scale.set(hw * 0.5, hh * 0.3, 3);
     }
+    this.head.visible = !p.img;
     this.hair.mesh.visible = false; this.hand.visible = false; this.flyG.visible = false;
 
     // 鼻毛（根元=左の鼻の穴）
     this.rootG.updateMatrixWorld(true);
     this.nostrilL.getWorldPosition(this.tmp); this.rootG.worldToLocal(this.tmp);
-    const rX = this.tmp.x, rY = this.tmp.y, rZ = this.tmp.z + 3;
+    let rX = this.tmp.x, rY = this.tmp.y, rZ = this.tmp.z + 3;
+    if (p.img) { rX = (p.rootX ?? 0) - cx; rY = cy - (p.rootY ?? 0); rZ = 6; }
     if (p.hairKind > 0) {
       const tx = p.tipX - cx, ty = cy - p.tipY, n = 40, cl = this.hair.cl;
       for (let i = 0; i <= n; i++) {
