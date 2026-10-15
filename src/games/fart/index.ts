@@ -338,8 +338,33 @@ const mod: GameModule = {
       g.save(); g.translate(o.x, y); g.scale(f, 1); g.rotate(-0.12 + fl * 0.04); g.scale(1, 1 + fl * 0.1);
       g.drawImage(s.c, -w / 2, -h / 2, w, h); g.restore();
     }
+    function drawItem(o: Obs) {
+      const it = ASSETS.items[o.kind]!; const y = sy(o.y); if (y < -140 || y > H + 140) return;
+      const s = it.s, w = it.w, h = w / s.aspect, f = o.vx >= 0 ? 1 : -1;
+      g.save(); g.translate(o.x, y);
+      switch (o.kind) {
+        case 'balloon': g.rotate(Math.sin(o.ph * 2) * 0.08); break;
+        case 'storm': g.translate(0, Math.sin(o.ph * 2) * 2); break;
+        case 'plane': g.scale(f, 1); g.rotate(Math.sin(o.ph * 2) * 0.03); break;
+        case 'ufo': g.rotate(Math.sin(o.ph * 3) * 0.1); break;
+        case 'meteor': g.rotate(Math.atan2(-o.vy, o.vx)); break;
+      }
+      const dx = -w * it.ax, dy = -h * it.ay;
+      if (o.kind === 'storm') {
+        const c = o.ph % 3.2, warn = c > 2.2 && c < 2.7, bolt = c >= 2.7 && c < 3.0;
+        g.drawImage(s.c, dx, dy, w, h);
+        if (bolt) { g.globalAlpha = 0.18; g.fillStyle = '#fff6a0'; g.beginPath(); g.ellipse(0, 0, w * 0.42, h * 0.35, 0, 0, 6.2832); g.fill(); g.globalAlpha = 1; }
+        if (warn) { g.globalAlpha = 0.5 + 0.5 * Math.sin(c * 40); g.fillStyle = '#ffef60'; g.fillRect(-2, 14, 4, 40); g.globalAlpha = 1; }
+        if (bolt) {
+          g.strokeStyle = '#fff6a0'; g.lineWidth = 8; g.beginPath(); g.moveTo(0, 14); g.lineTo(-10, 60); g.lineTo(6, 90); g.lineTo(-8, 140); g.lineTo(0, 220); g.stroke();
+          g.strokeStyle = '#fff'; g.lineWidth = 3; g.stroke();
+        }
+      } else g.drawImage(s.c, dx, dy, w, h);
+      g.restore();
+    }
     function drawObs(o: Obs) {
       if (o.kind === 'bird' && ASSETS.crow) { drawCrow(o); return; }
+      if (ASSETS.items[o.kind]) { drawItem(o); return; }
       const x = o.x, y = sy(o.y);
       if (y < -80 || y > H + 80) return;
       g.save(); g.translate(x, y);
@@ -462,7 +487,7 @@ const mod: GameModule = {
       const sx = shake > 0 ? rnd(-shake, shake) : 0, sy2 = shake > 0 ? rnd(-shake, shake) : 0;
       g = gBg!; fx(g, sx, sy2); drawBg(); speedLines(); g.restore();
       stg.setMap(S, OX, H, camY, sx, sy2); stg.begin();
-      for (const o of obs) if (o.y > camY - 120 && o.y < camY + H + 160 && !(o.kind === 'bird' && ASSETS.crow)) stg.obstacle(o);
+      for (const o of obs) if (o.y > camY - 120 && o.y < camY + H + 160 && !(o.kind === 'bird' && ASSETS.crow) && !ASSETS.items[o.kind]) stg.obstacle(o);
       const jp = st === 'play' ? clamp(jet / 0.3, 0, 1) : 0, dead = st === 'dying' && dyingT > 0.6;
       stg.parts(parts, H);
       const ex = dead ? 'dead' : expr;
@@ -470,7 +495,7 @@ const mod: GameModule = {
         st === 'dying' ? rot * 0.35 : tilt * 2.2 + Math.sin(t * 2) * 0.12, st === 'play' ? -clamp(vy / CFG.maxUp, -1, 1) * 0.18 : 0, true, !ASSETS.hero);
       stg.end(); stg.render();
       g = gTop; fx(g, sx, sy2);
-      if (ASSETS.crow) for (const o of obs) if (o.kind === 'bird') drawCrow(o);
+      for (const o of obs) { if (o.kind === 'bird') { if (ASSETS.crow) drawCrow(o); } else if (ASSETS.items[o.kind]) drawItem(o); }
       if (ASSETS.hero) drawHeroSprite(px, sy(py), st === 'dying' ? rot : tilt);
       if (bubbleT > 0) drawBubble(g, bubbleTxt, clamp(px, 70, W - 70), sy(py) - CFG.playerH * 0.7, 20);
       overlay(); g.restore();

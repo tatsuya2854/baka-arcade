@@ -3,7 +3,16 @@ import { loadImg } from '../../core/images';
 
 const SLUG = 'fart-elevator';
 export interface Spr { c: HTMLCanvasElement; aspect: number }
-export const ASSETS: { bg: HTMLImageElement | null; hero: Spr | null; crow: Spr | null } = { bg: null, hero: null, crow: null };
+/** 障害物の画像枠。w=描画幅, ax/ay=当たり判定の中心にあたる画像内の位置(0..1) */
+export interface ItemSpr { s: Spr; w: number; ax: number; ay: number }
+const ITEMS: Record<string, { id: string; w: number; ax: number; ay: number }> = {
+  balloon: { id: 'item_balloon', w: 56, ax: 0.5, ay: 0.26 },
+  storm: { id: 'item_cloud', w: 124, ax: 0.5, ay: 0.5 },
+  plane: { id: 'item_plane', w: 108, ax: 0.5, ay: 0.5 },
+  ufo: { id: 'item_ufo', w: 88, ax: 0.5, ay: 0.5 },
+  meteor: { id: 'item_meteor', w: 76, ax: 0.6, ay: 0.5 },
+};
+export const ASSETS: { bg: HTMLImageElement | null; hero: Spr | null; crow: Spr | null; items: Record<string, ItemSpr | undefined> } = { bg: null, hero: null, crow: null, items: {} };
 let loading: Promise<void> | null = null;
 
 /** 不透明部分だけを切り出し、軽量サイズにして色味(右上の陽)を軽く乗せる。 */
@@ -24,7 +33,8 @@ function prep(img: HTMLImageElement, H: number): Spr {
 }
 
 export function loadFartAssets(): Promise<void> {
-  return loading ??= Promise.all([loadImg(SLUG, 'bg'), loadImg(SLUG, 'hero'), loadImg(SLUG, 'item')]).then(([bg, hero, item]) => {
+  return loading ??= Promise.all([loadImg(SLUG, 'bg'), loadImg(SLUG, 'hero'), loadImg(SLUG, 'item'), ...Object.values(ITEMS).map(v => loadImg(SLUG, v.id))]).then(([bg, hero, item, ...its]) => {
+    Object.keys(ITEMS).forEach((k, i) => { const im = its[i]; const v = ITEMS[k]; ASSETS.items[k] = im ? { s: prep(im, 140), w: v.w, ax: v.ax, ay: v.ay } : undefined; });
     ASSETS.bg = bg; ASSETS.hero = hero ? prep(hero, 300) : null; ASSETS.crow = item ? prep(item, 200) : null;
   });
 }

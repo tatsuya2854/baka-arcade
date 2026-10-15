@@ -121,6 +121,56 @@
    "w": 1536,
    "h": 1024,
    "alpha": false
+  },
+  "item_balloon": {
+   "v": "2447d488",
+   "widths": [
+    360,
+    720
+   ],
+   "w": 1024,
+   "h": 1024,
+   "alpha": true
+  },
+  "item_cloud": {
+   "v": "833c5388",
+   "widths": [
+    360,
+    720
+   ],
+   "w": 1024,
+   "h": 1024,
+   "alpha": true
+  },
+  "item_plane": {
+   "v": "f16fd145",
+   "widths": [
+    360,
+    720
+   ],
+   "w": 1024,
+   "h": 1024,
+   "alpha": true
+  },
+  "item_ufo": {
+   "v": "37e68f70",
+   "widths": [
+    360,
+    720
+   ],
+   "w": 1024,
+   "h": 1024,
+   "alpha": true
+  },
+  "item_meteor": {
+   "v": "28471527",
+   "widths": [
+    360,
+    720
+   ],
+   "w": 1024,
+   "h": 1024,
+   "alpha": true
   }
  },
  "save-the-hair": {

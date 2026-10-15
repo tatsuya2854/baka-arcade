@@ -62,7 +62,12 @@
         "hero": "a middle-aged Japanese office worker in a suit in a mid-air seated pose, calm serious face, arms crossed, full body",
         "item": "a crow in flight with wings fully spread, seen from slightly below, dark glossy feathers",
         "result_good": "the curved horizon of the Earth seen from orbit with a small tiny salaryman floating, tie drifting",
-        "result_bad": "a salaryman lying flat on a suburban rooftop looking at the sky, dignified despair"
+        "result_bad": "a salaryman lying flat on a suburban rooftop looking at the sky, dignified despair",
+        "item_balloon": "ONLY one glossy red helium balloon with a thin string, isolated on a plain pure white background, nothing else in the frame: no sky, no clouds, no houses, no ground, no sun",
+        "item_cloud": "a single dense dark storm cloud (cumulonimbus fragment) with soft volumetric edges, lit from upper right",
+        "item_plane": "ONLY one small white passenger jet seen from below in banking flight, isolated on a plain pure white background, nothing else in the frame: no sky, no clouds, no earth, no sun, no markings or text",
+        "item_ufo": "a classic silver flying saucer UFO with a subtle ring of soft lights, seen from slightly below, realistic brushed metal, no text",
+        "item_meteor": "a glowing fiery rock meteor with a short trailing glow, realistic rocky texture, seen from the side"
       }
     },
     "save-the-hair": {

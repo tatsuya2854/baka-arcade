@@ -152,7 +152,8 @@ export class Arcade extends DurableObject<Env> {
     if (method === 'GET' && path === '/api/stats') {
       if (!adminToken || auth !== 'Bearer ' + adminToken) return json({ error: 'not found' }, 404);
       const rows = this.sql.exec('SELECT day,k,n FROM ev ORDER BY day DESC LIMIT 600').toArray() as { day: string; k: string; n: number }[];
-      const tot: Record<string, number> = {}; for (const r of rows) tot[r.k] = (tot[r.k] ?? 0) + r.n;
+      // 合計は全期間を SQL で集計（rows は直近のみ。UTM キーが増えても欠けない）
+      const tot: Record<string, number> = {}; for (const r of this.sql.exec('SELECT k, SUM(n) AS n FROM ev GROUP BY k').toArray() as { k: string; n: number }[]) tot[r.k] = r.n;
       const kpi = { third_play_rate_new_visitors: (tot['visit_new|'] ?? 0) ? (tot['third_play_new|'] ?? 0) / tot['visit_new|'] : null };
       const g = (k: string) => tot[k] ?? 0, sum = (p: string) => Object.entries(tot).filter(([k]) => k.startsWith(p)).reduce((a, [, n]) => a + n, 0), div = (a: number, b: number) => (b ? Math.round((a / b) * 1000) / 1000 : null);
       // バイラルループ指標。share_click は「共有ボタン押下」であり投稿完了ではない（実際の投稿数は計測不能）

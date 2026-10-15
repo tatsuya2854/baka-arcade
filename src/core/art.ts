@@ -1,5 +1,6 @@
 // 結果アート → 投稿画像（X 1200x675 / IG 1080x1350 / Story 1080x1920）・動画。Canvasのみ、API課金なし。
 import type { GameMeta, GameResult } from './types';
+import { loadImg, drawCover } from './images';
 export type Fmt = 'x' | 'ig' | 'story';
 export const FMT: Record<Fmt, { w: number; h: number; label: string }> = { x: { w: 1200, h: 675, label: 'X用 16:9' }, ig: { w: 1080, h: 1350, label: 'Instagram 4:5' }, story: { w: 1080, h: 1920, label: 'ストーリーズ 9:16' } };
 const FONT = '"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans JP","Meiryo",sans-serif';
@@ -12,44 +13,45 @@ function wrap(g: CanvasRenderingContext2D, text: string, x: number, y: number, m
   for (const l of lines.slice(0, maxLines)) { g.fillText(l, x, y + n * lh); n++; }
   return n * lh;
 }
-export interface PosterOpts { rank?: string; rateText?: string; fmt: Fmt; isBest: boolean; bp: number; rareName?: string; url: string; challenge?: string; t?: number }
+export interface PosterOpts { rank?: string; rateText?: string; fmt: Fmt; isBest: boolean; bp: number; rareName?: string; url: string; challenge?: string; t?: number; photo?: HTMLImageElement | null }
 /** 投稿用ポスター。ゲーム画面のスクショではなく、artの描画を主役に再構成する */
 export function drawPoster(g: CanvasRenderingContext2D, meta: GameMeta, r: GameResult, o: PosterOpts) {
   const { w: W, h: H } = FMT[o.fmt], art = r.art, wide = o.fmt === 'x', S = W / 1080 * (wide ? 0.9 : 1);
-  const bg = g.createLinearGradient(0, 0, W, H); bg.addColorStop(0, '#2a0b4d'); bg.addColorStop(1, '#07060f'); g.fillStyle = bg; g.fillRect(0, 0, W, H);
-  g.strokeStyle = meta.color + '2a'; g.lineWidth = 2; for (let x = -W; x < W * 2; x += 90 * S) { g.beginPath(); g.moveTo(W / 2, H * 0.55); g.lineTo(x, H); g.stroke(); }
+  g.fillStyle = '#0b0b0c'; g.fillRect(0, 0, W, H);
+  if (o.photo) { drawCover(g, o.photo, W, H); const sh = g.createLinearGradient(0, 0, 0, H); sh.addColorStop(0, 'rgba(11,11,12,.55)'); sh.addColorStop(0.35, 'rgba(11,11,12,.72)'); sh.addColorStop(1, 'rgba(11,11,12,.94)'); g.fillStyle = sh; g.fillRect(0, 0, W, H); }
   g.textAlign = 'left'; g.textBaseline = 'alphabetic';
-  g.fillStyle = '#ff3d81'; g.font = font(900, 40 * S); g.fillText('BAKA ARCADE', 36 * S, 62 * S);
-  g.fillStyle = meta.color; g.font = font(900, 38 * S); g.textAlign = 'right'; g.fillText(meta.title, W - 36 * S, 62 * S); g.textAlign = 'left';
+  g.fillStyle = '#f3f1ec'; g.font = font(800, 30 * S); g.fillText('B A K A   A R C A D E', 36 * S, 62 * S);
+  g.fillStyle = '#d6d3cb'; g.font = font(700, 34 * S); g.textAlign = 'right'; g.fillText(meta.title, W - 36 * S, 62 * S); g.textAlign = 'left';
   // アート領域
   const pad = 36 * S, top = 90 * S;
   const artW = wide ? W * 0.5 : W - pad * 2, artH = wide ? H - top - 70 * S : o.fmt === 'ig' ? H * 0.5 : H * 0.46;
-  g.save(); g.beginPath(); g.roundRect(pad, top, artW, artH, 28 * S); g.clip(); g.translate(pad, top);
-  g.fillStyle = '#0b0a1c'; g.fillRect(0, 0, artW, artH);
+  g.save(); g.beginPath(); g.roundRect(pad, top, artW, artH, 10 * S); g.clip(); g.translate(pad, top);
+  g.fillStyle = o.photo ? 'rgba(11,11,12,.55)' : '#0b0b0c'; g.fillRect(0, 0, artW, artH);
   try { art?.draw(g, artW, artH, o.t ?? 0); } catch (e) { console.warn(e); }
-  g.restore(); g.strokeStyle = meta.color; g.lineWidth = 5 * S; g.beginPath(); g.roundRect(pad, top, artW, artH, 28 * S); g.stroke();
+  g.restore(); g.strokeStyle = 'rgba(243,241,236,.35)'; g.lineWidth = 2 * S; g.beginPath(); g.roundRect(pad, top, artW, artH, 10 * S); g.stroke();
   // テキスト領域
   const tx = wide ? pad + artW + 36 * S : pad, tw = wide ? W - tx - pad : W - pad * 2; let ty = wide ? top + 40 * S : top + artH + 70 * S;
-  if (o.rareName) { g.fillStyle = '#ffd93d'; g.font = font(900, 34 * S); g.fillText(`レア発見：${o.rareName}${o.rateText ? '  ' + o.rateText : ''}`.slice(0, 34), tx, ty); ty += 56 * S; }
-  if (o.rank) { g.fillStyle = '#ff3d81'; g.font = font(900, 40 * S); g.textAlign = 'right'; g.fillText(`RANK ${o.rank}`, W - pad, top + artH + (wide ? -16 * S : 56 * S)); g.textAlign = 'left'; }
-  g.fillStyle = '#9a93c4'; g.font = font(700, 30 * S); g.fillText('称号', tx, ty); ty += 62 * S;
+  if (o.rareName) { g.fillStyle = '#d9c9a3'; g.font = font(800, 34 * S); g.fillText(`レア発見：${o.rareName}${o.rateText ? '  ' + o.rateText : ''}`.slice(0, 34), tx, ty); ty += 56 * S; }
+  if (o.rank) { g.fillStyle = '#f3f1ec'; g.font = font(800, 40 * S); g.textAlign = 'right'; g.fillText(`RANK ${o.rank}`, W - pad, top + artH + (wide ? -16 * S : 56 * S)); g.textAlign = 'left'; }
+  g.fillStyle = '#8e8b84'; g.font = font(700, 28 * S); g.fillText('称号', tx, ty); ty += 62 * S;
   let fs = 66 * S; g.font = font(900, fs); while (g.measureText(art?.title ?? '').width > tw && fs > 30) { fs -= 3; g.font = font(900, fs); }
-  g.fillStyle = '#fff'; g.shadowColor = meta.color; g.shadowBlur = 24 * S; g.fillText(art?.title ?? r.scoreText, tx, ty); g.shadowBlur = 0; ty += 36 * S + fs * 0.2;
-  g.fillStyle = '#ffd93d'; g.font = font(900, 84 * S); g.fillText(r.scoreText, tx, ty + 56 * S); ty += 100 * S;
-  g.fillStyle = '#d9d4ff'; g.font = font(600, 32 * S); ty += wrap(g, art?.comment ?? r.shareText, tx, ty, tw, 46 * S, wide ? 3 : 3) + 8 * S;
-  g.font = font(700, 28 * S); g.fillStyle = '#9a93c4';
-  for (const f of (art?.facts ?? []).slice(0, wide ? 3 : 4)) { g.fillText(`${f.label}：${f.value}`, tx, ty + 30 * S); ty += 44 * S; }
-  if (o.isBest) { g.fillStyle = '#39ff88'; g.font = font(900, 34 * S); g.fillText('🎉 自己ベスト更新！', tx, ty + 44 * S); }
+  g.fillStyle = '#f3f1ec'; g.fillText(art?.title ?? r.scoreText, tx, ty); ty += 36 * S + fs * 0.2;
+  g.fillStyle = '#d9c9a3'; g.font = font(800, 84 * S); g.fillText(r.scoreText, tx, ty + 56 * S); ty += 100 * S;
+  g.fillStyle = '#d6d3cb'; g.font = font(500, 32 * S); ty += wrap(g, art?.comment ?? r.shareText, tx, ty, tw, 46 * S, wide ? 3 : 3) + 8 * S;
+  g.font = font(600, 28 * S); g.fillStyle = '#9a9790';
+  for (const f of (art?.facts ?? []).slice(0, wide ? 3 : 4)) { if (ty + 44 * S > H - 150 * S) break; g.fillText(`${f.label}：${f.value}`.slice(0, 30), tx, ty + 30 * S); ty += 44 * S; }
+  if (o.isBest && ty + 44 * S < H - 150 * S) { g.fillStyle = '#d9c9a3'; g.font = font(800, 34 * S); g.fillText('自己ベスト更新！', tx, ty + 44 * S); }
   // フッター
-  g.fillStyle = '#ff3d81'; g.font = font(800, 30 * S); g.textAlign = 'center';
-  if (o.challenge) g.fillText(o.challenge, W / 2, H - 92 * S);
-  g.fillStyle = '#c9c3f0'; g.font = font(700, 28 * S); g.fillText(`${o.url.replace(/^https?:\/\//, '')}　くだらない。でも、やめられない。`, W / 2, H - 40 * S);
+  g.fillStyle = '#f3f1ec'; g.font = font(700, 30 * S); g.textAlign = 'center';
+  if (o.challenge) { let c = o.challenge; while (g.measureText(c).width > W - 2 * pad && c.length > 8) c = c.slice(0, -2); g.fillText(c === o.challenge ? c : c + '…', W / 2, H - 92 * S); }
+  g.fillStyle = '#9a9790'; g.font = font(600, 26 * S); g.fillText(`${o.url.replace(/^https?:\/\//, '')}　見た目は超リアル。やることは超くだらない。`, W / 2, H - 40 * S);
   g.textAlign = 'left';
 }
 export async function posterBlob(meta: GameMeta, r: GameResult, o: PosterOpts): Promise<Blob> {
   try { await document.fonts?.ready; } catch { /* */ }
   const { w, h } = FMT[o.fmt], c = document.createElement('canvas'); c.width = w; c.height = h;
-  drawPoster(c.getContext('2d')!, meta, r, o);
+  const good = 'SAB'.includes(o.rank ?? 'D'), photo = o.photo ?? await loadImg(meta.slug, good ? 'result_good' : 'result_bad') ?? await loadImg(meta.slug, 'result_good');
+  drawPoster(c.getContext('2d')!, meta, r, { ...o, photo });
   return await new Promise((res, rej) => c.toBlob(b => (b ? res(b) : rej(new Error('toBlob'))), 'image/png'));
 }
 
@@ -70,9 +72,9 @@ export async function recordReplay(meta: GameMeta, r: GameResult, o: PosterOpts,
   await new Promise<void>(res => {
     const f = () => {
       const el = performance.now() - t0, t = Math.min(rp.durationSec, el / 1000 * slow);
-      g.fillStyle = '#0b0a1c'; g.fillRect(0, 0, 540, 960);
+      g.fillStyle = '#0b0b0c'; g.fillRect(0, 0, 540, 960);
       g.save(); g.translate(0, 110); g.beginPath(); g.rect(0, 0, 540, 640); g.clip(); try { rp.draw(g, 540, 640, t); } catch { /* */ } g.restore();
-      g.fillStyle = '#ff3d81'; g.font = font(900, 30); g.textAlign = 'center'; g.fillText('BAKA ARCADE', 270, 56);
+      g.fillStyle = '#f3f1ec'; g.font = font(900, 30); g.textAlign = 'center'; g.fillText('BAKA ARCADE', 270, 56);
       g.fillStyle = '#fff'; g.font = font(900, 34); g.fillText(r.art?.title ?? '', 270, 820); g.fillStyle = '#ffd93d'; g.font = font(900, 44); g.fillText(r.scoreText, 270, 880);
       g.fillStyle = '#c9c3f0'; g.font = font(700, 22); g.fillText(o.url.replace(/^https?:\/\//, ''), 270, 930);
       if (el < total) requestAnimationFrame(f); else res();

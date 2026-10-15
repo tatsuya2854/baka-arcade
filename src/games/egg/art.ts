@@ -55,17 +55,17 @@ export function buildArt(ds: Drop[], avg: number): ResultArt {
       g.fillStyle = col; g.beginPath(); g.arc(x, y, rr, 0, 7); g.fill(); g.strokeStyle = 'rgba(0,0,0,.6)'; g.lineWidth = 1.5; g.stroke();
       g.fillStyle = '#111'; g.font = `900 ${Math.round(rr * 1.4)}px ${FONT}`; g.fillText(String(i + 1), x, y + 1);
     });
-    const fs = Math.round(Math.max(11, w * 0.034)), cw = w * 0.29;
+    const u = Math.min(w, h * 0.8), fs = Math.round(Math.max(11, u * 0.034)), cw = u * 0.29;
     ds.forEach((d, i) => {
-      const x = w / 2 + (i - 1) * (cw + w * 0.02), y = h * 0.8;
+      const x = w / 2 + (i - 1) * (cw + u * 0.02), y = h * 0.76;
       g.fillStyle = 'rgba(8,8,10,.78)'; g.beginPath(); g.roundRect(x - cw / 2, y - fs, cw, fs * 2, fs); g.fill();
       g.fillStyle = COLS[i % 3]; g.font = `800 ${fs}px ${FONT}`; g.fillText(`${i + 1}  ${d.miss ? '外れ' : fmm(d.d)}`, x, y + 1);
     });
     drawSteamPublic(g, gm, t, 0.7);
     // 見出し
     g.fillStyle = 'rgba(255,255,255,.9)'; g.font = `900 ${Math.round(w * 0.05)}px ${FONT}`; g.fillText('目玉焼きを落とせ', w / 2, h * 0.07);
-    g.fillStyle = '#ffc83d'; g.font = `900 ${Math.round(w * 0.1)}px ${FONT}`; g.fillText(`${avg}点`, w / 2, h * 0.88);
-    g.fillStyle = 'rgba(255,255,255,.75)'; g.font = `800 ${Math.round(w * 0.04)}px ${FONT}`; g.fillText(title, w / 2, h * 0.95);
+    g.fillStyle = '#ffc83d'; g.font = `900 ${Math.round(u * 0.1)}px ${FONT}`; g.fillText(`${avg}点`, w / 2, h * 0.89);
+    g.fillStyle = 'rgba(255,255,255,.75)'; g.font = `800 ${Math.round(u * 0.04)}px ${FONT}`; g.fillText(title, w / 2, h * 0.96);
   };
   const durationSec = 4.2;
   const replay = {

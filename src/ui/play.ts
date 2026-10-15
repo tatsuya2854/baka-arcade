@@ -129,7 +129,7 @@ export function renderPlay(app: HTMLElement, id: string, challenge?: Challenge):
     const $ = <T extends HTMLElement>(q: string) => layer.querySelector<T>(q)!;
     const msg = (t: string) => { $('#smsg').textContent = t; };
     const ptext = () => $<HTMLTextAreaElement>('#ptext').value;
-    const popts = () => ({ fmt, isBest, bp: gain.gained, rareName: rare.name, rank, rateText: rateText.split('（')[0], url: location.origin, challenge: `⚔️ 挑戦状：これを超えられる？ → ${chUrl().replace(/^https?:\/\//, '')}`.slice(0, 80) });
+    const popts = () => ({ fmt, isBest, bp: gain.gained, rareName: rare.name, rank, rateText: rateText.split('（')[0], url: location.origin, challenge: '挑戦状：これを超えられる？ → リンクから同じゲームへ' });
     // レア出現率（実測が溜まるまでは目安と明示）
     if (r.art?.rare) fetchRareStat(m.id).then(st => { rateText = rarityText(m.id, r.art!.rare!, st); const el = layer.querySelector('#rate'); if (el) el.textContent = rateText; const ta = layer.querySelector<HTMLTextAreaElement>('#ptext'); const was = ta?.value === textFor(); variants = genVariants(m, r, { rank, rareName: rare.name, isBest, beat, rateText }); if (ta && was) ta.value = textFor(); });
     // 共有は最大2タップ: 「結果を共有」1タップで画像つき共有。非対応端末は画像保存＋X投稿画面（自動投稿はしない）
